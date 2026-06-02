@@ -1,0 +1,1363 @@
+<!--
+-- Run in Supabase SQL editor:
+create table profiles (
+  id uuid references auth.users primary key,
+  name text, school text, address text, whatsapp text,
+  initials text, color int default 152,
+  rating float default 5.0, sales int default 0, balance float default 0,
+  created_at timestamptz default now()
+);
+create table books (
+  id uuid default gen_random_uuid() primary key,
+  title text not null, author text default '',
+  subject text, year text, school text,
+  condition text default 'bom', price float default 0,
+  delivery text default 'combinado',
+  photo_url text default '',
+  seller_id uuid references profiles(id),
+  status text default 'active',
+  faved_count int default 0,
+  created_at timestamptz default now()
+);
+create table chats (
+  id uuid default gen_random_uuid() primary key,
+  book_id uuid references books(id),
+  buyer_id uuid references profiles(id),
+  seller_id uuid references profiles(id),
+  created_at timestamptz default now()
+);
+create table messages (
+  id uuid default gen_random_uuid() primary key,
+  chat_id uuid references chats(id),
+  sender_id uuid references profiles(id),
+  text text, created_at timestamptz default now()
+);
+create table orders (
+  id uuid default gen_random_uuid() primary key,
+  book_id uuid references books(id),
+  buyer_id uuid references profiles(id),
+  seller_id uuid references profiles(id),
+  status text default 'payment_confirmed',
+  buyer_confirmed_delivery boolean default false,
+  seller_confirmed_delivery boolean default false,
+  created_at timestamptz default now()
+);
+-- Storage: create bucket 'book-photos' (public)
+-- RLS: For development, disable RLS on all tables or add permissive policies
+-- Allow all: alter table profiles enable row level security; create policy "all" on profiles for all using (true) with check (true);
+-- (repeat for books, chats, messages, orders)
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Livros Online</title>
+<meta name="theme-color" content="#1f9d57"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Livros Online"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icon.svg"/>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:#e8e8ed;font-family:-apple-system,system-ui,sans-serif;}
+#root{height:100%;}
+:root{
+  --green:#1f9d57;--green-d:color-mix(in oklab,#1f9d57,black 22%);
+  --green-shadow:color-mix(in oklab,#1f9d57,transparent 45%);
+  --blue:oklch(0.52 0.14 248);--blue-d:oklch(0.42 0.14 248);
+  --ink:#111827;--muted:#6b7280;--bg:#f5f5f7;--surface:#ffffff;
+  --line:rgba(0,0,0,0.09);--card-radius:16px;
+}
+@keyframes pop{from{transform:scale(0.6);opacity:0;}to{transform:scale(1);opacity:1;}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+input,textarea,select{font-family:inherit;}
+@media(max-width:500px){
+  .phone-shell{width:100%!important;height:100%!important;border-radius:0!important;box-shadow:none!important;}
+  .phone-notch{display:none!important;}
+  .phone-home-bar{display:none!important;}
+  .phone-outer{padding:0!important;background:var(--bg)!important;align-items:stretch!important;min-height:100vh!important;}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { createClient } = window.supabase;
+const SUPA_URL = 'https://yozssLpvdhqurxoawcgj.supabase.co';
+const SUPA_KEY = 'sb_secret_nwg-UGXOFWFZgCxyFOrSQ_15_DViBD';
+const sb = createClient(SUPA_URL, SUPA_KEY);
+
+// ─── CONSTANTS ───────────────────────────────────────────────
+const FEE_RATE = 0.175;
+const TABS = ['home','search','chat','profile'];
+const PIX_KEY = '21998729191';
+const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
+const ICONBTN = {width:38,height:38,borderRadius:'50%',border:'none',background:'rgba(0,0,0,0.06)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0};
+
+const SCHOOLS = ['Escola Alemã Corcovado','British School','Santo Inácio','Eleva','Santo Agostinho','Outra'];
+const YEARS = ['1º ano','2º ano','3º ano','ENEM / Vestibular'];
+const SUBJECTS_BY_YEAR = {
+  '1º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Artes'],
+  '2º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Sociologia'],
+  '3º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Redação'],
+  'ENEM / Vestibular':['Matemática','Português','Ciências da Natureza','Ciências Humanas','Linguagens','Redação'],
+};
+const CONDITIONS = {novo:{label:'Como novo',tone:'green'},bom:{label:'Bom estado',tone:'blue'},usado:{label:'Usado',tone:'neutral'}};
+const SUBJECT_HUES = {'Matemática':152,'Português':248,'Literatura':25,'Física':200,'Química':300,'Biologia':135,'História':50,'Geografia':175,'Inglês':270,'Filosofia':15,'Sociologia':40,'Artes':320,'Redação':248,'Ciências da Natureza':135,'Ciências Humanas':50,'Linguagens':270};
+
+function calcFees(price){
+  const totalFee = price * FEE_RATE;
+  const halfFee = totalFee / 2;
+  const buyerPays = price + halfFee;
+  const sellerReceives = price - halfFee;
+  return {totalFee, halfFee, buyerPays, sellerReceives};
+}
+
+// ─── ICON ────────────────────────────────────────────────────
+function Icon({name,size=24,color='currentColor',strokeWidth=1.8,fill='none'}){
+  const p={fill,stroke:fill==='none'?color:'none',strokeWidth,strokeLinecap:'round',strokeLinejoin:'round'};
+  const paths={
+    home:<><path d="M3 10.5L12 3l9 7.5" {...p}/><path d="M5 9.5V20h14V9.5" {...p}/></>,
+    search:<><circle cx="11" cy="11" r="7" {...p}/><path d="M20 20l-3.5-3.5" {...p}/></>,
+    plus:<><path d="M12 5v14M5 12h14" {...p}/></>,
+    chat:<><path d="M4 5h16v11H9l-4 4V5z" {...p}/></>,
+    user:<><circle cx="12" cy="8" r="4" {...p}/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" {...p}/></>,
+    heart:<><path d="M12 20S4 14.5 4 9a4 4 0 017.5-2A4 4 0 0120 9c0 5.5-8 11-8 11z" {...p}/></>,
+    star:<><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 20l1-6.1L3.2 9.5l6.1-.9L12 3z" {...p}/></>,
+    truck:<><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z" {...p}/><circle cx="7" cy="17.5" r="1.8" {...p}/><circle cx="17.5" cy="17.5" r="1.8" {...p}/></>,
+    pin:<><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" {...p}/><circle cx="12" cy="10" r="2.5" {...p}/></>,
+    camera:<><path d="M3 8h4l1.5-2h7L17 8h4v11H3z" {...p}/><circle cx="12" cy="13" r="3.5" {...p}/></>,
+    chevR:<><path d="M9 5l7 7-7 7" {...p}/></>,
+    chevL:<><path d="M15 5l-7 7 7 7" {...p}/></>,
+    check:<><path d="M4 12.5l5 5 11-11" {...p}/></>,
+    checkC:<><circle cx="12" cy="12" r="9" {...p}/><path d="M8 12.5l2.5 2.5 5-5.5" {...p}/></>,
+    close:<><path d="M6 6l12 12M18 6L6 18" {...p}/></>,
+    arrow:<><path d="M5 12h14M13 6l6 6-6 6" {...p}/></>,
+    shield:<><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" {...p}/><path d="M9 12l2 2 4-4" {...p}/></>,
+    tag:<><path d="M3 12V4h8l9 9-8 8-9-9z" {...p}/><circle cx="7.5" cy="7.5" r="1.3" fill={color} stroke="none"/></>,
+    send:<><path d="M4 12l16-7-7 16-2.5-6.5L4 12z" {...p}/></>,
+    wallet:<><path d="M3 7h15a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" {...p}/><path d="M3 7l13-3v3" {...p}/><circle cx="17" cy="13" r="1.4" fill={color} stroke="none"/></>,
+    bolt:<><path d="M13 3L5 13h6l-1 8 8-11h-6l1-7z" {...p}/></>,
+    school:<><path d="M12 3L2 9l10 6 10-6-10-6z" {...p}/><path d="M2 9v6M22 9v6M6 11v5c0 2 2.7 4 6 4s6-2 6-4v-5" {...p}/></>,
+    image:<><rect x="3" y="3" width="18" height="18" rx="3" {...p}/><circle cx="8.5" cy="8.5" r="1.5" {...p}/><path d="M21 15l-5-5L5 21" {...p}/></>,
+    edit:<><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" {...p}/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" {...p}/></>,
+    trash:<><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" {...p}/></>,
+    link:<><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" {...p}/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" {...p}/></>,
+    copy:<><rect x="9" y="9" width="13" height="13" rx="2" {...p}/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" {...p}/></>,
+    logout:<><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" {...p}/></>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" style={{flexShrink:0}}>{paths[name]||null}</svg>;
+}
+
+// ─── TOAST ───────────────────────────────────────────────────
+function Toast({msg,onDone}){
+  React.useEffect(()=>{const t=setTimeout(onDone,2800);return()=>clearTimeout(t);},[]);
+  return(
+    <div style={{position:'absolute',top:60,left:'50%',transform:'translateX(-50%)',zIndex:999,background:'rgba(0,0,0,0.82)',color:'#fff',padding:'10px 18px',borderRadius:20,fontSize:13.5,fontWeight:600,whiteSpace:'nowrap',animation:'fadeIn .2s ease',pointerEvents:'none',maxWidth:320,textAlign:'center'}}>
+      {msg}
+    </div>
+  );
+}
+
+// ─── SHARED COMPONENTS ───────────────────────────────────────
+function BookCover({book,radius=16,big=false}){
+  const hue = SUBJECT_HUES[book.subject] || 220;
+  const photoUrl = book.photo_url || book.photoUrl || '';
+  if(photoUrl){
+    return <div style={{width:'100%',aspectRatio:'1/1',borderRadius:radius,overflow:'hidden',background:`oklch(0.95 0.03 ${hue})`}}>
+      <img src={photoUrl} alt={book.title} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+    </div>;
+  }
+  return(
+    <div style={{position:'relative',width:'100%',aspectRatio:'1/1',borderRadius:radius,background:`oklch(0.95 0.03 ${hue})`,overflow:'hidden',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:big?22:14}}>
+      <div style={{position:'absolute',left:big?18:11,top:0,bottom:0,width:big?6:4,background:`oklch(0.62 0.13 ${hue})`,opacity:0.85}}/>
+      <div style={{position:'absolute',top:big?20:13,left:big?36:24,right:14,fontSize:big?13:10,fontWeight:700,letterSpacing:0.6,textTransform:'uppercase',color:`oklch(0.62 0.13 ${hue})`}}>{book.subject}</div>
+      <div style={{paddingLeft:big?16:10}}>
+        <div style={{fontSize:big?25:15,lineHeight:1.12,fontWeight:800,color:`oklch(0.34 0.08 ${hue})`,display:'-webkit-box',WebkitLineClamp:big?5:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{book.title}</div>
+        <div style={{fontSize:big?14:10.5,fontWeight:600,color:`oklch(0.34 0.08 ${hue})`,opacity:0.65,marginTop:big?8:5}}>{book.author}</div>
+      </div>
+    </div>
+  );
+}
+
+function Avatar({seller,size=38}){
+  if(!seller) return <div style={{width:size,height:size,borderRadius:'50%',background:'var(--line)'}}/>;
+  return <div style={{width:size,height:size,borderRadius:'50%',flexShrink:0,background:`oklch(0.9 0.05 ${seller.color||152})`,color:`oklch(0.42 0.1 ${seller.color||152})`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:size*0.36}}>{seller.initials||'?'}</div>;
+}
+
+function Rating({value,size=13}){
+  return <span style={{display:'inline-flex',alignItems:'center',gap:3,color:'oklch(0.7 0.13 75)'}}>
+    <Icon name="star" size={size} fill="oklch(0.74 0.14 75)" color="oklch(0.74 0.14 75)"/>
+    <span style={{fontSize:size,fontWeight:700,color:'var(--ink)'}}>{Number(value||5).toFixed(1)}</span>
+  </span>;
+}
+
+function Button({children,kind='primary',full,onClick,size='md',disabled,style={}}){
+  const heights={md:50,lg:56,sm:40};
+  const kinds={
+    primary:{background:'var(--green)',color:'#fff',boxShadow:'0 6px 16px -6px var(--green-shadow)'},
+    secondary:{background:'var(--surface)',color:'var(--ink)',boxShadow:'inset 0 0 0 1.5px var(--line)'},
+    ghost:{background:'transparent',color:'var(--green-d)'},
+    danger:{background:'#fee2e2',color:'#b91c1c'},
+  };
+  return <button onClick={onClick} disabled={disabled} style={{...kinds[kind],height:heights[size],padding:'0 18px',borderRadius:14,border:'none',cursor:disabled?'not-allowed':'pointer',fontWeight:700,fontSize:size==='lg'?17:15,width:full?'100%':undefined,fontFamily:'inherit',opacity:disabled?0.5:1,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,...style}}>{children}</button>;
+}
+
+function FilterPill({label,active,onClick}){
+  return <button onClick={onClick} style={{flexShrink:0,height:36,padding:'0 16px',borderRadius:999,cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:700,whiteSpace:'nowrap',border:'none',background:active?'var(--ink)':'var(--surface)',color:active?'#fff':'var(--muted)',boxShadow:active?'none':'inset 0 0 0 1.5px var(--line)'}}>{label}</button>;
+}
+
+function ConditionBadge({condition,small}){
+  const c=CONDITIONS[condition]||CONDITIONS.bom;
+  const tones={green:{bg:'oklch(0.95 0.05 152)',fg:'oklch(0.45 0.11 152)'},blue:{bg:'oklch(0.95 0.04 248)',fg:'oklch(0.48 0.12 248)'},neutral:{bg:'oklch(0.94 0.004 250)',fg:'oklch(0.45 0.01 250)'}};
+  const t=tones[c.tone];
+  return <span style={{display:'inline-flex',alignItems:'center',background:t.bg,color:t.fg,fontSize:small?11:12,fontWeight:700,padding:small?'3px 8px':'4px 10px',borderRadius:999}}>{c.label}</span>;
+}
+
+function DeliveryTag({type,small}){
+  const opts={comprador_busca:{icon:'pin',label:'Comprador busca',color:'var(--blue-d)'},combinado:{icon:'truck',label:'Combinar entrega',color:'var(--green-d)'}};
+  const o=opts[type]||opts.combinado;
+  return <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:small?11:12.5,fontWeight:700,color:o.color}}><Icon name={o.icon} size={small?14:16}/>{o.label}</span>;
+}
+
+// ─── LOADING SCREEN ──────────────────────────────────────────
+function LoadingScreen(){
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',gap:20}}>
+      <div style={{width:64,height:64,borderRadius:18,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 12px 28px -10px var(--green-shadow)'}}>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+        </svg>
+      </div>
+      <div style={{width:36,height:36,border:'3.5px solid var(--line)',borderTopColor:'var(--green)',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>
+    </div>
+  );
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────
+function LoginScreen({onLogin,error}){
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:28}}>
+      <div style={{width:'100%',maxWidth:340,background:'var(--surface)',borderRadius:28,padding:'36px 28px',boxShadow:'0 16px 40px -16px rgba(0,0,0,0.18)',display:'flex',flexDirection:'column',alignItems:'center'}}>
+        <div style={{width:72,height:72,borderRadius:22,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,boxShadow:'0 12px 28px -10px var(--green-shadow)'}}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+        </div>
+        <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5,textAlign:'center'}}>Livros Online</div>
+        <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:28}}>Marketplace de livros escolares usados</div>
+        {error&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:14,textAlign:'center'}}>{error}</div>}
+        <button onClick={onLogin} style={{width:'100%',height:54,borderRadius:16,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12,boxShadow:'0 2px 8px -4px rgba(0,0,0,0.1)'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Entrar com Google
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── REGISTER SCREEN ─────────────────────────────────────────
+function RegisterScreen({user,onSave,loading}){
+  const meta = user?.user_metadata || {};
+  const [name,setName]=React.useState(meta.full_name||'');
+  const [school,setSchool]=React.useState(SCHOOLS[0]);
+  const [address,setAddress]=React.useState('');
+  const [whatsapp,setWhatsapp]=React.useState('');
+  const [err,setErr]=React.useState('');
+
+  const INPUT={width:'100%',height:50,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'var(--surface)',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none'};
+
+  const save=()=>{
+    if(!name.trim()){setErr('Informe seu nome completo');return;}
+    if(!whatsapp.trim()){setErr('Informe seu WhatsApp');return;}
+    setErr('');
+    const parts=name.trim().split(' ');
+    const initials=(parts[0][0]+(parts.length>1?parts[parts.length-1][0]:parts[0][1]||'')).toUpperCase();
+    onSave({name:name.trim(),school,address,whatsapp,initials,color:SUBJECT_HUES[school]||152});
+  };
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{fontSize:22,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4}}>Criar perfil</div>
+        <div style={{fontSize:13,fontWeight:500,color:'var(--muted)',marginTop:4}}>Precisamos de alguns dados para começar</div>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18,display:'flex',flexDirection:'column',gap:18}}>
+        {err&&<div style={{background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600}}>{err}</div>}
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Nome completo</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome" style={INPUT}/>
+        </div>
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Escola</label>
+          <select value={school} onChange={e=>setSchool(e.target.value)} style={{...INPUT,appearance:'none',WebkitAppearance:'none'}}>
+            {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Endereço (opcional)</label>
+          <input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Bairro, cidade" style={INPUT}/>
+        </div>
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>WhatsApp</label>
+          <input value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="(21) 99999-9999" type="tel" style={INPUT}/>
+        </div>
+      </div>
+      <div style={{padding:'12px 18px 28px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
+        <Button kind="primary" full size="lg" disabled={loading||!name.trim()||!whatsapp.trim()} onClick={save}>
+          {loading?'Salvando…':'Criar perfil'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME CARD ───────────────────────────────────────────────
+function HomeCard({book,onOpen,faved,toggleFav}){
+  const {buyerPays} = calcFees(book.price);
+  return(
+    <div onClick={()=>onOpen(book.id)} style={{borderRadius:'var(--card-radius)',background:'var(--surface)',boxShadow:'0 2px 12px rgba(0,0,0,0.07)',cursor:'pointer',overflow:'hidden',animation:'fadeIn .25s ease'}}>
+      <div style={{position:'relative',padding:10,paddingBottom:0}}>
+        <BookCover book={book}/>
+        <button onClick={e=>{e.stopPropagation();toggleFav(book.id);}} style={{position:'absolute',top:18,right:18,width:32,height:32,borderRadius:'50%',border:'none',background:'rgba(255,255,255,0.85)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
+          <Icon name="heart" size={17} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--muted)'}/>
+        </button>
+        <div style={{position:'absolute',bottom:8,left:18,fontSize:10,fontWeight:700,background:'rgba(255,255,255,0.9)',borderRadius:6,padding:'2px 6px',color:'var(--muted)'}}>{book.school}</div>
+      </div>
+      <div style={{padding:'10px 12px 14px'}}>
+        <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',lineHeight:1.25,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',marginBottom:4}}>{book.title}</div>
+        <div style={{fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:6}}>{book.year} · {book.subject}</div>
+        <div style={{fontSize:16,fontWeight:800,color:'var(--green-d)'}}>{fmt(buyerPays)}</div>
+        <div style={{fontSize:10.5,fontWeight:600,color:'var(--muted)',marginBottom:4}}>anunciado por {fmt(book.price)}</div>
+        <ConditionBadge condition={book.condition} small/>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME SCREEN ─────────────────────────────────────────────
+function HomeScreen({go,favs,toggleFav,books}){
+  const [school,setSchool]=React.useState('Todas');
+  const [year,setYear]=React.useState('Todos');
+  const [subject,setSubject]=React.useState('Todos');
+  const schools=['Todas',...SCHOOLS];
+  const years=['Todos',...YEARS];
+  const subjects=React.useMemo(()=>{
+    if(year==='Todos') return ['Todos',...new Set(Object.values(SUBJECTS_BY_YEAR).flat())];
+    return ['Todos',...(SUBJECTS_BY_YEAR[year]||[])];
+  },[year]);
+
+  const list=books.filter(b=>b.status==='active'&&(school==='Todas'||b.school===school)&&(year==='Todos'||b.year===year)&&(subject==='Todos'||b.subject===subject));
+
+  return(
+    <div style={{background:'var(--bg)',minHeight:'100%'}}>
+      <div style={{padding:'58px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div>
+            <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5}}>Livros Online</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--muted)',marginTop:1}}>marketplace de livros usados</div>
+          </div>
+          <button onClick={()=>go('search')} style={ICONBTN}><Icon name="search" size={21} color="var(--ink)"/></button>
+        </div>
+        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',marginBottom:8,paddingBottom:2}}>
+          {schools.map(s=><FilterPill key={s} label={s} active={school===s} onClick={()=>{setSchool(s);setYear('Todos');setSubject('Todos');}}/>)}
+        </div>
+        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',marginBottom:8,paddingBottom:2}}>
+          {years.map(y=><FilterPill key={y} label={y} active={year===y} onClick={()=>{setYear(y);setSubject('Todos');}}/>)}
+        </div>
+        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',paddingBottom:2}}>
+          {subjects.map(s=><FilterPill key={s} label={s} active={subject===s} onClick={()=>setSubject(s)}/>)}
+        </div>
+      </div>
+
+      <div style={{padding:18}}>
+        <div onClick={()=>go('sell')} style={{borderRadius:18,background:`linear-gradient(120deg,var(--green-d),oklch(0.52 0.14 180))`,padding:'18px 20px',marginBottom:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:'#fff',marginBottom:4}}>Tem livros parados?</div>
+            <div style={{fontSize:13,fontWeight:500,color:'rgba(255,255,255,0.8)'}}>Anuncie agora e receba no Pix</div>
+          </div>
+          <div style={{width:44,height:44,borderRadius:13,background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <Icon name="arrow" size={22} color="#fff"/>
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+          <div style={{fontSize:17,fontWeight:800,color:'var(--ink)'}}>{list.length} anúncio{list.length!==1?'s':''}</div>
+        </div>
+        {list.length===0?(
+          <div style={{textAlign:'center',padding:'50px 20px',color:'var(--muted)'}}>
+            <Icon name="search" size={40} color="var(--line)"/>
+            <div style={{fontSize:15,fontWeight:700,marginTop:12,color:'var(--ink)'}}>Nenhum livro encontrado</div>
+            <div style={{fontSize:13,marginTop:4}}>Tenta outro filtro ou <span onClick={()=>go('sell')} style={{color:'var(--green-d)',cursor:'pointer',fontWeight:700}}>anuncia o seu</span></div>
+          </div>
+        ):(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+            {list.map(b=><HomeCard key={b.id} book={b} onOpen={id=>go('detail',{id})} faved={favs.includes(b.id)} toggleFav={toggleFav}/>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── DETAIL SCREEN ───────────────────────────────────────────
+function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
+  const book=books.find(b=>b.id===id);
+  if(!book) return null;
+  const sellerId = book.seller_id || book.sellerId;
+  const seller = sellers[sellerId] || {name:'Vendedor',initials:'?',color:200,rating:5,sales:0};
+  const faved=favs.includes(book.id);
+  const {buyerPays,halfFee}=calcFees(book.price);
+  const isMe = profile && sellerId === profile.id;
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 14px 12px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:12}}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <span style={{fontSize:17,fontWeight:800,color:'var(--ink)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Detalhe</span>
+        <button onClick={()=>toggleFav(book.id)} style={ICONBTN}><Icon name="heart" size={21} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--ink)'}/></button>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18}}>
+        <div style={{maxWidth:260,margin:'0 auto 20px',animation:'fadeIn .3s ease'}}><BookCover book={book} big/></div>
+        <div style={{fontSize:22,fontWeight:800,color:'var(--ink)',letterSpacing:-0.3,lineHeight:1.2,marginBottom:6}}>{book.title}</div>
+        <div style={{fontSize:14,fontWeight:600,color:'var(--muted)',marginBottom:4}}>{book.author}</div>
+        <div style={{fontSize:13,fontWeight:600,color:'var(--muted)',marginBottom:14,display:'flex',alignItems:'center',gap:6}}>
+          <Icon name="school" size={14} color="var(--muted)"/>{book.school} · {book.year} · {book.subject}
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:18,flexWrap:'wrap'}}>
+          <ConditionBadge condition={book.condition}/>
+          <DeliveryTag type={book.delivery}/>
+        </div>
+        <div style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:16,marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo de valores</div>
+          {[
+            ['Preço anunciado',fmt(book.price),false],
+            ['Taxa plataforma (÷2 comprador)','+'+fmt(halfFee),true],
+          ].map(([k,v,m])=>(
+            <div key={k} style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+              <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
+              <span style={{fontSize:14,fontWeight:700,color:m?'#b45309':'var(--ink)'}}>{v}</span>
+            </div>
+          ))}
+          <div style={{height:1,background:'var(--line)',margin:'8px 0'}}/>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+            <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Você paga</span>
+            <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(buyerPays)}</span>
+          </div>
+        </div>
+        <div style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:16,marginBottom:18}}>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Vendedor</div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <Avatar seller={seller} size={46}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15.5,fontWeight:800,color:'var(--ink)'}}>{seller.name}</div>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginTop:3}}>
+                <Rating value={seller.rating} size={13}/>
+                <span style={{fontSize:12.5,fontWeight:600,color:'var(--muted)'}}>· {seller.sales||0} vendas</span>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--muted)',marginTop:2}}>{seller.school}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:10,alignItems:'flex-start',padding:'0 4px',marginBottom:20}}>
+          <Icon name="shield" size={18} color="var(--green)"/>
+          <span style={{fontSize:12.5,fontWeight:500,color:'var(--muted)',lineHeight:1.45}}>O pagamento só é liberado ao vendedor quando você confirmar que recebeu o livro.</span>
+        </div>
+      </div>
+      {!isMe&&(
+        <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',display:'flex',gap:10}}>
+          <Button kind="secondary" onClick={()=>go('chatThread',{sellerId,bookId:book.id})} style={{flex:1}}>Chat</Button>
+          <Button kind="primary" onClick={()=>go('checkout',{id:book.id})} style={{flex:2}}>Comprar · {fmt(buyerPays)}</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────
+function SearchScreen({go,favs,toggleFav,books}){
+  const [q,setQ]=React.useState('');
+  const inputRef=React.useRef(null);
+  React.useEffect(()=>{inputRef.current&&inputRef.current.focus();},[]);
+  const ql=q.trim().toLowerCase();
+  const list=books.filter(b=>b.status==='active'&&(!ql||(b.title||'').toLowerCase().includes(ql)||(b.author||'').toLowerCase().includes(ql)||(b.subject||'').toLowerCase().includes(ql)||(b.school||'').toLowerCase().includes(ql)));
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 14px 12px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <button onClick={()=>go('home')} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+          <div style={{flex:1,height:44,borderRadius:13,background:'var(--bg)',display:'flex',alignItems:'center',gap:9,padding:'0 14px'}}>
+            <Icon name="search" size={19} color="var(--muted)"/>
+            <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar livro, matéria, escola…" style={{flex:1,border:'none',background:'transparent',outline:'none',fontSize:15,fontWeight:600,color:'var(--ink)'}}/>
+            {q&&<button onClick={()=>setQ('')} style={{border:'none',background:'none',cursor:'pointer',padding:0}}><Icon name="close" size={18} color="var(--muted)"/></button>}
+          </div>
+        </div>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18}}>
+        <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:14}}>{list.length} resultado{list.length!==1?'s':''}</div>
+        {list.length===0?(
+          <div style={{textAlign:'center',padding:'50px 20px'}}>
+            <Icon name="search" size={40} color="var(--line)"/>
+            <div style={{fontSize:15,fontWeight:700,marginTop:12,color:'var(--ink)'}}>Nada encontrado</div>
+          </div>
+        ):(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+            {list.map(b=><HomeCard key={b.id} book={b} onOpen={id=>go('detail',{id})} faved={favs.includes(b.id)} toggleFav={toggleFav}/>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CHAT LIST ───────────────────────────────────────────────
+function ChatListScreen({go,chats,profile,sellers,books}){
+  return(
+    <div style={{height:'100%',background:'var(--bg)'}}>
+      <div style={{padding:'56px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{fontSize:28,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5}}>Conversas</div>
+      </div>
+      <div style={{padding:'0 18px'}}>
+        {chats.length===0&&(
+          <div style={{textAlign:'center',padding:'60px 20px',color:'var(--muted)'}}>
+            <Icon name="chat" size={40} color="var(--line)"/>
+            <div style={{fontSize:15,fontWeight:700,marginTop:12,color:'var(--ink)'}}>Nenhuma conversa ainda</div>
+            <div style={{fontSize:13,marginTop:4}}>Encontre um livro e mande mensagem!</div>
+          </div>
+        )}
+        {chats.map(c=>{
+          const otherId = profile ? (c.buyer_id===profile.id ? c.seller_id : c.buyer_id) : null;
+          const other = sellers[otherId] || {name:'Usuário',initials:'?',color:200};
+          const book = books.find(b=>b.id===c.book_id)||{title:'Livro'};
+          return(
+            <button key={c.id} onClick={()=>go('chatThread',{chatId:c.id,sellerId:c.seller_id,bookId:c.book_id})} style={{width:'100%',textAlign:'left',display:'flex',alignItems:'center',gap:13,padding:'13px 0',border:'none',background:'none',cursor:'pointer',borderBottom:'1px solid var(--line)',fontFamily:'inherit'}}>
+              <Avatar seller={other} size={50}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                  <span style={{fontSize:15.5,fontWeight:800,color:'var(--ink)'}}>{other.name}</span>
+                </div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--green-d)',margin:'2px 0 3px'}}>📕 {book.title}</div>
+              </div>
+              <Icon name="chevR" size={18} color="var(--muted)"/>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── CHAT THREAD ─────────────────────────────────────────────
+function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,showToast}){
+  const [chat,setChat]=React.useState(null);
+  const [msgs,setMsgs]=React.useState([]);
+  const [draft,setDraft]=React.useState('');
+  const [order,setOrder]=React.useState(null);
+  const [confirmingDelivery,setConfirmingDelivery]=React.useState(false);
+  const scrollRef=React.useRef(null);
+  const book=books.find(b=>b.id===bookId)||{title:'Livro',price:0,subject:'',author:''};
+  const otherSeller=sellers[sellerId]||{name:'Vendedor',initials:'?',color:200};
+  const {buyerPays}=calcFees(book.price);
+
+  const loadMsgs=React.useCallback(async(cid)=>{
+    const {data}=await sb.from('messages').select('*').eq('chat_id',cid).order('created_at',{ascending:true});
+    setMsgs(data||[]);
+  },[]);
+
+  const loadOrder=React.useCallback(async()=>{
+    if(!bookId)return;
+    const {data}=await sb.from('orders').select('*').eq('book_id',bookId).maybeSingle();
+    setOrder(data||null);
+  },[bookId]);
+
+  const loadOrCreateChat=React.useCallback(async()=>{
+    if(!profile)return;
+    if(chatId){
+      setChat({id:chatId});
+      loadMsgs(chatId);
+      loadOrder();
+      return;
+    }
+    const {data:existing}=await sb.from('chats').select('*').eq('book_id',bookId).eq('buyer_id',profile.id).maybeSingle();
+    if(existing){
+      setChat(existing);
+      loadMsgs(existing.id);
+      loadOrder();
+    } else {
+      const {data:newChat,error}=await sb.from('chats').insert({book_id:bookId,buyer_id:profile.id,seller_id:sellerId}).select().single();
+      if(error){showToast('Erro ao iniciar chat');return;}
+      setChat(newChat);
+    }
+  },[chatId,bookId,sellerId,profile,loadMsgs,loadOrder,showToast]);
+
+  React.useEffect(()=>{loadOrCreateChat();},[loadOrCreateChat]);
+
+  React.useEffect(()=>{
+    if(!chat)return;
+    const sub=sb.channel('msgs-'+chat.id)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`chat_id=eq.${chat.id}`},payload=>{
+        setMsgs(m=>[...m,payload.new]);
+      })
+      .subscribe();
+    return ()=>sb.removeChannel(sub);
+  },[chat]);
+
+  React.useEffect(()=>{
+    if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight;
+  },[msgs]);
+
+  const send=async()=>{
+    if(!draft.trim()||!chat||!profile)return;
+    const txt=draft.trim();
+    setDraft('');
+    await sb.from('messages').insert({chat_id:chat.id,sender_id:profile.id,text:txt});
+  };
+
+  const confirmDelivery=async()=>{
+    if(!order||!profile||confirmingDelivery)return;
+    setConfirmingDelivery(true);
+    const isBuyer=profile.id===order.buyer_id;
+    const update=isBuyer?{buyer_confirmed_delivery:true}:{seller_confirmed_delivery:true};
+    const newBuyer=isBuyer?true:order.buyer_confirmed_delivery;
+    const newSeller=isBuyer?order.seller_confirmed_delivery:true;
+    const bothDone=newBuyer&&newSeller;
+    if(bothDone) update.status='completed';
+    const {data}=await sb.from('orders').update(update).eq('id',order.id).select().single();
+    if(data){
+      setOrder(data);
+      if(bothDone){
+        await sb.from('books').update({status:'sold'}).eq('id',bookId);
+        showToast('Entrega confirmada! Negócio concluído');
+      } else {
+        showToast('Confirmacao registrada, aguardando a outra parte');
+      }
+    }
+    setConfirmingDelivery(false);
+  };
+
+  const isBuyer=profile&&order&&profile.id===order.buyer_id;
+  const myConfirmed=order&&(isBuyer?order.buyer_confirmed_delivery:order.seller_confirmed_delivery);
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 14px 11px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:11}}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <Avatar seller={otherSeller} size={40}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:15.5,fontWeight:800,color:'var(--ink)'}}>{otherSeller.name}</div>
+        </div>
+      </div>
+      <button onClick={()=>go('detail',{id:bookId})} style={{display:'flex',alignItems:'center',gap:12,margin:'12px 14px 0',padding:10,borderRadius:14,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',cursor:'pointer',fontFamily:'inherit',textAlign:'left',border:'none'}}>
+        <div style={{width:44,height:44,borderRadius:9,overflow:'hidden',flexShrink:0}}><BookCover book={book} radius={9}/></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:800,color:'var(--ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{book.title}</div>
+          <div style={{fontSize:14,fontWeight:800,color:'var(--green-d)'}}>{fmt(buyerPays)}</div>
+        </div>
+        <Icon name="chevR" size={18} color="var(--muted)"/>
+      </button>
+
+      {order&&(
+        <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,background:order.status==='completed'?'oklch(0.96 0.04 152)':'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
+            {order.status==='completed'?'Negocio concluido!':'Pedido em andamento'}
+          </div>
+          {order.status!=='completed'&&(
+            <>
+              <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
+                Comprador: {order.buyer_confirmed_delivery?'confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'confirmou':'aguardando'}
+              </div>
+              {!myConfirmed&&(
+                <Button kind="primary" full size="sm" disabled={confirmingDelivery} onClick={confirmDelivery}>
+                  Confirmar que recebi o livro
+                </Button>
+              )}
+              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
+            </>
+          )}
+        </div>
+      )}
+
+      <div ref={scrollRef} style={{flex:1,overflow:'auto',padding:'16px 14px',display:'flex',flexDirection:'column',gap:8}}>
+        {msgs.map((m,i)=>(
+          <div key={m.id||i} style={{alignSelf:m.sender_id===profile?.id?'flex-end':'flex-start',maxWidth:'78%'}}>
+            <div style={{padding:'10px 14px',borderRadius:18,fontSize:14.5,fontWeight:500,lineHeight:1.4,background:m.sender_id===profile?.id?'var(--green)':'var(--surface)',color:m.sender_id===profile?.id?'#fff':'var(--ink)',borderBottomRightRadius:m.sender_id===profile?.id?5:18,borderBottomLeftRadius:m.sender_id===profile?.id?18:5,boxShadow:m.sender_id===profile?.id?'none':'inset 0 0 0 1.5px var(--line)'}}>{m.text}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{padding:'10px 14px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',display:'flex',gap:9,alignItems:'center'}}>
+        <input value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Mensagem…" style={{flex:1,height:46,borderRadius:23,border:'none',background:'var(--bg)',padding:'0 16px',fontSize:15,fontWeight:500,outline:'none',color:'var(--ink)'}}/>
+        <button onClick={send} style={{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0}}>
+          <Icon name="send" size={20} color="#fff" fill="#fff"/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── SELL SCREEN ─────────────────────────────────────────────
+function SellScreen({go,onPublish,profile,showToast}){
+  const [photoUrl,setPhotoUrl]=React.useState('');
+  const [uploading,setUploading]=React.useState(false);
+  const [title,setTitle]=React.useState('');
+  const [author,setAuthor]=React.useState('');
+  const [year,setYear]=React.useState('1º ano');
+  const [subject,setSubject]=React.useState('Matemática');
+  const [school,setSchool]=React.useState(profile?.school||SCHOOLS[0]);
+  const [condition,setCondition]=React.useState('bom');
+  const [priceStr,setPriceStr]=React.useState('');
+  const [delivery,setDelivery]=React.useState('combinado');
+  const [publishing,setPublishing]=React.useState(false);
+  const fileRef=React.useRef(null);
+
+  const price=Math.max(0,parseFloat(priceStr.replace(',','.'))||0);
+  const {halfFee,sellerReceives,buyerPays}=calcFees(price);
+  const subjects=SUBJECTS_BY_YEAR[year]||[];
+
+  const INPUT={width:'100%',height:50,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'var(--surface)',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none',boxSizing:'border-box'};
+
+  const handlePhoto=async(e)=>{
+    const file=e.target.files[0];
+    if(!file||!profile)return;
+    setUploading(true);
+    try{
+      const ext=file.name.split('.').pop();
+      const path=`${profile.id}/${Date.now()}.${ext}`;
+      const {error}=await sb.storage.from('book-photos').upload(path,file,{upsert:true});
+      if(error)throw error;
+      const {data:pub}=sb.storage.from('book-photos').getPublicUrl(path);
+      setPhotoUrl(pub.publicUrl);
+      showToast('Foto enviada!');
+    }catch(err){
+      showToast('Erro ao enviar foto: '+err.message);
+    }
+    setUploading(false);
+  };
+
+  const publish=async()=>{
+    if(!title.trim()||price<=0||!profile)return;
+    setPublishing(true);
+    try{
+      const {data,error}=await sb.from('books').insert({
+        title:title.trim(),author:author.trim(),subject,year,school,condition,price,delivery,
+        photo_url:photoUrl,seller_id:profile.id,status:'active',faved_count:0
+      }).select().single();
+      if(error)throw error;
+      onPublish(data);
+    }catch(err){
+      showToast('Erro ao publicar: '+err.message);
+    }
+    setPublishing(false);
+  };
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 18px 12px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:12}}>
+        <button onClick={()=>go('home')} style={ICONBTN}><Icon name="close" size={21} color="var(--ink)"/></button>
+        <span style={{fontSize:18,fontWeight:800,color:'var(--ink)'}}>Anunciar livro</span>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18,display:'flex',flexDirection:'column',gap:20}}>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Foto do livro</label>
+          <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto}/>
+          {!photoUrl?(
+            <button onClick={()=>fileRef.current.click()} style={{width:'100%',height:110,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 2px var(--line)',background:'var(--surface)',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,color:'var(--muted)',fontFamily:'inherit'}}>
+              {uploading
+                ?<div style={{width:28,height:28,border:'3px solid var(--line)',borderTopColor:'var(--green)',borderRadius:'50%',animation:'spin .7s linear infinite'}}/>
+                :<><Icon name="camera" size={32} color="var(--muted)"/><span style={{fontSize:13,fontWeight:600}}>Tirar foto / escolher galeria</span></>
+              }
+            </button>
+          ):(
+            <div style={{position:'relative',borderRadius:13,overflow:'hidden',height:140,background:'var(--line)'}}>
+              <img src={photoUrl} alt="preview" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              <button onClick={()=>setPhotoUrl('')} style={{position:'absolute',top:8,right:8,width:30,height:30,borderRadius:'50%',border:'none',background:'rgba(0,0,0,0.6)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
+                <Icon name="close" size={16} color="#fff"/>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Título do livro</label>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Matemática — Volume Único" style={INPUT}/>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Autor (opcional)</label>
+          <input value={author} onChange={e=>setAuthor(e.target.value)} placeholder="Ex: Manoel Paiva" style={INPUT}/>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Escola</label>
+          <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:2,scrollbarWidth:'none'}}>
+            {SCHOOLS.map(s=><FilterPill key={s} label={s} active={school===s} onClick={()=>setSchool(s)}/>)}
+          </div>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Ano</label>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {YEARS.map(y=><button key={y} onClick={()=>{setYear(y);setSubject(SUBJECTS_BY_YEAR[y][0]);}} style={{flex:1,minWidth:80,height:44,borderRadius:12,border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:13,fontWeight:700,background:year===y?'var(--ink)':'var(--surface)',color:year===y?'#fff':'var(--muted)',boxShadow:year===y?'none':'inset 0 0 0 1.5px var(--line)'}}>{y}</button>)}
+          </div>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Matéria</label>
+          <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:2,scrollbarWidth:'none'}}>
+            {subjects.map(s=><FilterPill key={s} label={s} active={subject===s} onClick={()=>setSubject(s)}/>)}
+          </div>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Estado de conservação</label>
+          <div style={{display:'flex',gap:8}}>
+            {Object.entries(CONDITIONS).map(([k,v])=><button key={k} onClick={()=>setCondition(k)} style={{flex:1,height:44,borderRadius:12,border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:700,background:condition===k?'var(--ink)':'var(--surface)',color:condition===k?'#fff':'var(--muted)',boxShadow:condition===k?'none':'inset 0 0 0 1.5px var(--line)'}}>{v.label}</button>)}
+          </div>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Seu preço (você define)</label>
+          <div style={{position:'relative'}}>
+            <span style={{position:'absolute',left:15,top:'50%',transform:'translateY(-50%)',fontSize:16,fontWeight:800,color:'var(--muted)'}}>R$</span>
+            <input value={priceStr} onChange={e=>setPriceStr(e.target.value.replace(/[^0-9.,]/g,''))} inputMode="decimal" placeholder="0,00" style={{...INPUT,paddingLeft:46,fontSize:18,fontWeight:800}}/>
+          </div>
+        </div>
+
+        <div>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:10}}>Entrega</label>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {[
+              {v:'comprador_busca',icon:'pin',title:'Comprador busca',sub:'O comprador vem até você buscar na escola.'},
+              {v:'combinado',icon:'truck',title:'Combinar entrega',sub:'Vocês combinam pelo chat como entregar.'},
+            ].map(o=>(
+              <button key={o.v} onClick={()=>setDelivery(o.v)} style={{textAlign:'left',width:'100%',cursor:'pointer',fontFamily:'inherit',border:'none',borderRadius:16,padding:14,background:'var(--surface)',boxShadow:delivery===o.v?'inset 0 0 0 2px var(--green)':'inset 0 0 0 1.5px var(--line)',display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:40,height:40,borderRadius:11,flexShrink:0,background:delivery===o.v?'var(--green)':'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <Icon name={o.icon} size={21} color={delivery===o.v?'#fff':'var(--muted)'}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:15,fontWeight:800,color:'var(--ink)',marginBottom:2}}>{o.title}</div>
+                  <div style={{fontSize:12.5,fontWeight:500,color:'var(--muted)'}}>{o.sub}</div>
+                </div>
+                {delivery===o.v&&<Icon name="checkC" size={22} color="var(--green)"/>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {price>0&&(
+          <div style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo</div>
+            {[
+              ['Seu preço',fmt(price),false],
+              ['Taxa plataforma (÷2 vendedor)','– '+fmt(halfFee),true],
+            ].map(([k,v,m])=>(
+              <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
+                <span style={{fontSize:14,fontWeight:700,color:m?'#b45309':'var(--ink)'}}>{v}</span>
+              </div>
+            ))}
+            <div style={{height:1,background:'var(--line)',margin:'8px 0'}}/>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+              <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Você recebe no Pix</span>
+              <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(sellerReceives)}</span>
+            </div>
+            <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginTop:6}}>Comprador paga {fmt(buyerPays)} (taxa ÷2)</div>
+          </div>
+        )}
+      </div>
+      <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
+        <Button kind="primary" full size="lg" disabled={price<=0||!title.trim()||publishing||uploading} onClick={publish}>
+          {publishing?'Publicando…':'Publicar anúncio'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── CHECKOUT ────────────────────────────────────────────────
+function FakeQR({size=160}){
+  const N=21,cell=size/N;const cells=[];let seed=7;
+  const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+  const finder=(r,c)=>(r<7&&c<7)||(r<7&&c>=N-7)||(r>=N-7&&c<7);
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(finder(r,c))continue;if(rnd()>0.55)cells.push(<rect key={r+'-'+c} x={c*cell} y={r*cell} width={cell} height={cell} rx={cell*0.2} fill="var(--ink)"/>);}
+  const Finder=({x,y})=>(<g><rect x={x*cell} y={y*cell} width={cell*7} height={cell*7} rx={cell*1.6} fill="var(--ink)"/><rect x={(x+1)*cell} y={(y+1)*cell} width={cell*5} height={cell*5} rx={cell} fill="#fff"/><rect x={(x+2)*cell} y={(y+2)*cell} width={cell*3} height={cell*3} rx={cell*0.6} fill="var(--ink)"/></g>);
+  return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{cells}<Finder x={0} y={0}/><Finder x={N-7} y={0}/><Finder x={0} y={N-7}/></svg>;
+}
+
+function CheckoutScreen({id,back,go,books,profile,showToast}){
+  const book=books.find(b=>b.id===id);
+  if(!book)return null;
+  const [copied,setCopied]=React.useState(false);
+  const [confirmed,setConfirmed]=React.useState(false);
+  const [saving,setSaving]=React.useState(false);
+  const {buyerPays,halfFee}=calcFees(book.price);
+  const sellerId = book.seller_id || book.sellerId;
+
+  const copyPix=()=>{
+    navigator.clipboard.writeText(PIX_KEY)
+      .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1800);})
+      .catch(()=>showToast('Nao foi possivel copiar'));
+  };
+
+  const confirmPayment=async()=>{
+    if(!profile||saving)return;
+    setSaving(true);
+    try{
+      const {error}=await sb.from('orders').insert({
+        book_id:id,buyer_id:profile.id,seller_id:sellerId,status:'payment_confirmed'
+      });
+      if(error)throw error;
+      setConfirmed(true);
+    }catch(err){
+      showToast('Erro: '+err.message);
+    }
+    setSaving(false);
+  };
+
+  if(confirmed) return(
+    <div style={{height:'100%',background:'var(--bg)',display:'flex',flexDirection:'column',padding:24,justifyContent:'center'}}>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',flex:1,justifyContent:'center'}}>
+        <div style={{width:88,height:88,borderRadius:'50%',background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 14px 34px -12px var(--green-shadow)',marginBottom:22,animation:'pop .4s cubic-bezier(.2,1.3,.4,1)'}}>
+          <Icon name="check" size={44} color="#fff" strokeWidth={3.2}/>
+        </div>
+        <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4}}>Pagamento confirmado!</div>
+        <div style={{fontSize:14.5,fontWeight:500,color:'var(--muted)',marginTop:10,maxWidth:290,lineHeight:1.5}}>Combine a retirada de "{book.title}" pelo chat com o vendedor.</div>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <Button kind="primary" full size="lg" onClick={()=>go('chatThread',{sellerId,bookId:id})}>Ver chat com vendedor</Button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 14px 12px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:12}}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <span style={{fontSize:18,fontWeight:800,color:'var(--ink)'}}>Pagar com Pix</span>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18,display:'flex',flexDirection:'column',gap:16}}>
+        <div style={{display:'flex',gap:13,padding:14,borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+          <div style={{width:54,height:54,borderRadius:11,overflow:'hidden',flexShrink:0}}><BookCover book={book} radius={11}/></div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14.5,fontWeight:800,color:'var(--ink)',lineHeight:1.2,marginBottom:5}}>{book.title}</div>
+            <div style={{fontSize:12,fontWeight:600,color:'var(--muted)'}}>{book.year} · {book.subject}</div>
+          </div>
+          <div style={{fontSize:18,fontWeight:800,color:'var(--ink)'}}>{fmt(buyerPays)}</div>
+        </div>
+
+        <div style={{borderRadius:14,background:'oklch(0.96 0.03 50)',padding:12,fontSize:12.5,fontWeight:500,color:'oklch(0.4 0.1 50)',lineHeight:1.5}}>
+          Taxa de {fmt(halfFee)} inclusa (split 50/50 com o vendedor)
+        </div>
+
+        <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <div style={{fontSize:13.5,fontWeight:700,color:'var(--muted)'}}>Escaneie para pagar</div>
+          <div style={{fontSize:30,fontWeight:800,color:'var(--green-d)',margin:'4px 0 16px'}}>{fmt(buyerPays)}</div>
+          <div style={{padding:14,borderRadius:16,background:'#fff',boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)'}}><FakeQR/></div>
+
+          <div style={{marginTop:16,width:'100%',padding:'12px 14px',borderRadius:13,background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5}}>Chave Pix</div>
+              <div style={{fontSize:18,fontWeight:800,color:'var(--ink)',letterSpacing:1}}>{PIX_KEY}</div>
+            </div>
+            <button onClick={copyPix} style={{height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+              <Icon name={copied?'check':'copy'} size={15} color={copied?'var(--green-d)':'#fff'}/>{copied?'Copiado!':'Copiar chave Pix'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{display:'flex',gap:10,alignItems:'flex-start',padding:'0 4px'}}>
+          <Icon name="shield" size={18} color="var(--green)"/>
+          <span style={{fontSize:12.5,fontWeight:500,color:'var(--muted)',lineHeight:1.45}}>O pagamento só é liberado ao vendedor quando você confirmar o recebimento do livro.</span>
+        </div>
+      </div>
+      <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
+        <Button kind="primary" full size="lg" disabled={saving} onClick={confirmPayment}>
+          {saving?'Confirmando…':'Já fiz o pagamento'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── PROFILE ─────────────────────────────────────────────────
+function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
+  const myBooks=books.filter(b=>(b.seller_id||b.sellerId)===profile?.id);
+
+  const deleteBook=async(bookId)=>{
+    const {error}=await sb.from('books').delete().eq('id',bookId);
+    if(error){showToast('Erro ao remover anuncio');return;}
+    setBooks(prev=>prev.filter(b=>b.id!==bookId));
+  };
+
+  if(!profile) return <LoadingScreen/>;
+
+  return(
+    <div style={{height:'100%',background:'var(--bg)',overflow:'auto'}}>
+      <div style={{padding:'56px 18px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <Avatar seller={profile} size={58}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:20,fontWeight:800,color:'var(--ink)'}}>{profile.name}</div>
+            <div style={{display:'flex',alignItems:'center',gap:7,marginTop:3}}>
+              <Rating value={profile.rating||5} size={13}/>
+              <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>· {profile.school}</span>
+            </div>
+          </div>
+          <button onClick={onLogout} style={{...ICONBTN,background:'#fee2e2'}} title="Sair">
+            <Icon name="logout" size={19} color="#b91c1c"/>
+          </button>
+        </div>
+
+        <div style={{marginTop:18,borderRadius:20,padding:20,color:'#fff',position:'relative',overflow:'hidden',background:'linear-gradient(120deg,oklch(0.42 0.1 248) 0%,var(--green-d) 110%)',boxShadow:'0 12px 26px -14px oklch(0.42 0.1 248 / 0.8)'}}>
+          <div style={{position:'absolute',right:-20,top:-20,width:120,height:120,borderRadius:'50%',background:'rgba(255,255,255,0.08)'}}/>
+          <div style={{display:'flex',alignItems:'center',gap:7,fontSize:13,fontWeight:600,opacity:0.9}}>
+            <Icon name="wallet" size={17} color="#fff"/> Saldo disponível para sacar
+          </div>
+          <div style={{fontSize:34,fontWeight:800,letterSpacing:-0.5,marginTop:6}}>{fmt(profile.balance||0)}</div>
+          <button style={{marginTop:16,height:44,width:'100%',borderRadius:12,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:800,fontSize:14.5,background:'#fff',color:'var(--green-d)',display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+            <Icon name="bolt" size={17} fill="var(--green-d)" color="var(--green-d)"/> Sacar via Pix
+          </button>
+        </div>
+
+        <div style={{display:'flex',marginTop:16,padding:'16px 8px',borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+          {[[String(profile.sales||0),'Vendas'],[String(myBooks.filter(b=>b.status==='active').length),'Ativos'],[Number(profile.rating||5).toFixed(1),'Avaliação']].map(([v,l],i,a)=>(
+            <React.Fragment key={l}>
+              <div style={{flex:1,textAlign:'center'}}>
+                <div style={{fontSize:20,fontWeight:800,color:'var(--ink)'}}>{v}</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--muted)',marginTop:2}}>{l}</div>
+              </div>
+              {i<a.length-1&&<div style={{width:1,background:'var(--line)'}}/>}
+            </React.Fragment>
+          ))}
+        </div>
+
+        <div style={{marginTop:22,display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div style={{fontSize:17,fontWeight:800,color:'var(--ink)'}}>Meus anúncios</div>
+          <button onClick={()=>go('sell')} style={{display:'flex',alignItems:'center',gap:4,border:'none',background:'none',cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:800,color:'var(--green-d)',padding:0}}>
+            <Icon name="plus" size={16}/> Novo
+          </button>
+        </div>
+        {myBooks.length===0&&(
+          <div style={{textAlign:'center',padding:'30px 20px',color:'var(--muted)',background:'var(--surface)',borderRadius:16}}>
+            <div style={{fontSize:14,fontWeight:700,color:'var(--ink)'}}>Nenhum anúncio ainda</div>
+            <button onClick={()=>go('sell')} style={{marginTop:10,border:'none',background:'none',cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:700,color:'var(--green-d)',padding:0}}>Anunciar agora →</button>
+          </div>
+        )}
+        {myBooks.map(b=>{
+          const {sellerReceives}=calcFees(b.price);
+          return(
+            <div key={b.id} style={{display:'flex',alignItems:'center',gap:12,padding:'11px 0',borderBottom:'1px solid var(--line)'}}>
+              <div style={{width:44,height:44,borderRadius:9,overflow:'hidden',flexShrink:0}}><BookCover book={b} radius={9}/></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:800,color:'var(--ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</div>
+                <div style={{fontSize:12.5,fontWeight:700,color:'var(--green-d)',marginTop:2}}>Você recebe {fmt(sellerReceives)}</div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+                <span style={{fontSize:11.5,fontWeight:800,padding:'4px 10px',borderRadius:999,background:b.status==='active'?'oklch(0.95 0.05 152)':'var(--bg)',color:b.status==='active'?'var(--green-d)':'var(--muted)'}}>{b.status==='active'?'Ativo':'Vendido'}</span>
+                <button onClick={()=>deleteBook(b.id)} style={{border:'none',background:'none',cursor:'pointer',padding:0}}><Icon name="trash" size={16} color="var(--muted)"/></button>
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{marginTop:24}}>
+          <Button kind="danger" full onClick={onLogout}>
+            <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTOM NAV ──────────────────────────────────────────────
+function BottomNav({current,go}){
+  const items=[
+    {key:'home',icon:'home',label:'Início'},
+    {key:'search',icon:'search',label:'Buscar'},
+    {key:'sell',center:true},
+    {key:'chat',icon:'chat',label:'Chat'},
+    {key:'profile',icon:'user',label:'Perfil'},
+  ];
+  return(
+    <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:40,background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',paddingBottom:22,display:'flex',alignItems:'flex-start',justifyContent:'space-around',paddingTop:9}}>
+      {items.map(it=>{
+        if(it.center)return(
+          <button key="sell" onClick={()=>go('sell')} style={{border:'none',cursor:'pointer',background:'none',marginTop:-2,padding:0}}>
+            <div style={{width:52,height:52,borderRadius:17,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 18px -6px var(--green-shadow)'}}>
+              <Icon name="plus" size={26} color="#fff" strokeWidth={2.4}/>
+            </div>
+          </button>
+        );
+        const active=current===it.key;
+        return(
+          <button key={it.key} onClick={()=>go(it.key)} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0}}>
+            <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
+            <span style={{fontSize:10.5,fontWeight:700,color:active?'var(--green-d)':'var(--muted)'}}>{it.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── PHONE SHELL WRAPPER ─────────────────────────────────────
+function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
+  return(
+    <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#e8e8ed'}}>
+      <div className="phone-shell" style={{width:390,height:844,borderRadius:48,overflow:'hidden',position:'relative',background:'var(--bg)',boxShadow:'0 40px 80px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.12)',fontFamily:'-apple-system,system-ui,sans-serif',WebkitFontSmoothing:'antialiased'}}>
+        <div className="phone-notch" style={{position:'absolute',top:11,left:'50%',transform:'translateX(-50%)',width:126,height:37,borderRadius:24,background:'#000',zIndex:50}}/>
+        <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
+          {children}
+        </div>
+        {showNav&&<BottomNav current={rootTab} go={go}/>}
+        <div className="phone-home-bar" style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,height:34,display:'flex',justifyContent:'center',alignItems:'flex-end',paddingBottom:8,pointerEvents:'none'}}>
+          <div style={{width:139,height:5,borderRadius:100,background:'rgba(0,0,0,0.25)'}}/>
+        </div>
+        {toast&&<Toast msg={toast} onDone={()=>setToast('')}/>}
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────
+function App(){
+  const [appState,setAppState]=React.useState('loading');
+  const [authUser,setAuthUser]=React.useState(null);
+  const [profile,setProfile]=React.useState(null);
+  const [loginError,setLoginError]=React.useState('');
+  const [profileSaving,setProfileSaving]=React.useState(false);
+  const [books,setBooks]=React.useState([]);
+  const [chats,setChats]=React.useState([]);
+  const [sellers,setSellers]=React.useState({});
+  const [favs,setFavs]=React.useState([]);
+  const [stack,setStack]=React.useState([{screen:'home'}]);
+  const [toast,setToast]=React.useState('');
+
+  const showToast=React.useCallback((msg)=>{setToast(msg);},[]);
+  const go=React.useCallback((screen,params)=>{
+    if(TABS.includes(screen)) setStack([{screen,params}]);
+    else setStack(s=>[...s,{screen,params}]);
+  },[]);
+  const back=React.useCallback(()=>setStack(s=>s.length>1?s.slice(0,-1):s),[]);
+  const toggleFav=React.useCallback(id=>setFavs(f=>f.includes(id)?f.filter(x=>x!==id):[...f,id]),[]);
+
+  const loadBooks=React.useCallback(async()=>{
+    const {data,error}=await sb.from('books').select('*').eq('status','active').order('created_at',{ascending:false});
+    if(!error&&data) setBooks(data);
+  },[]);
+
+  const loadChats=React.useCallback(async(uid)=>{
+    const {data}=await sb.from('chats').select('*').or(`buyer_id.eq.${uid},seller_id.eq.${uid}`).order('created_at',{ascending:false});
+    if(data) setChats(data);
+  },[]);
+
+  const loadSellers=React.useCallback(async(bookList)=>{
+    const ids=[...new Set(bookList.map(b=>b.seller_id).filter(Boolean))];
+    if(!ids.length)return;
+    const {data}=await sb.from('profiles').select('*').in('id',ids);
+    if(data){
+      const map={};
+      data.forEach(p=>{map[p.id]=p;});
+      setSellers(prev=>({...prev,...map}));
+    }
+  },[]);
+
+  React.useEffect(()=>{
+    let realtimeChan=null;
+
+    const handleUser=async(user)=>{
+      setAuthUser(user);
+      const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+      if(prof&&prof.name){
+        setProfile(prof);
+        setAppState('app');
+        loadBooks();
+        loadChats(user.id);
+        // realtime books
+        realtimeChan=sb.channel('books-rt')
+          .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},payload=>{
+            setBooks(prev=>{
+              if(prev.find(b=>b.id===payload.new.id)) return prev;
+              return [payload.new,...prev];
+            });
+          })
+          .subscribe();
+      } else {
+        setAppState('register');
+      }
+    };
+
+    sb.auth.getSession().then(({data:{session}})=>{
+      if(session) handleUser(session.user);
+      else setAppState('login');
+    });
+
+    const {data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
+      if(event==='SIGNED_IN'&&session){
+        handleUser(session.user);
+      } else if(event==='SIGNED_OUT'){
+        setAppState('login');
+        setAuthUser(null);
+        setProfile(null);
+        setBooks([]);
+        setChats([]);
+        if(realtimeChan) sb.removeChannel(realtimeChan);
+      }
+    });
+
+    return ()=>{
+      subscription.unsubscribe();
+      if(realtimeChan) sb.removeChannel(realtimeChan);
+    };
+  },[]);
+
+  React.useEffect(()=>{
+    if(books.length>0) loadSellers(books);
+  },[books,loadSellers]);
+
+  React.useEffect(()=>{
+    if(!chats.length)return;
+    const ids=[...new Set([...chats.map(c=>c.buyer_id),...chats.map(c=>c.seller_id)].filter(Boolean))];
+    sb.from('profiles').select('*').in('id',ids).then(({data})=>{
+      if(data){const map={};data.forEach(p=>{map[p.id]=p;});setSellers(prev=>({...prev,...map}));}
+    });
+  },[chats]);
+
+  const handleLogin=async()=>{
+    setLoginError('');
+    const {error}=await sb.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo:window.location.origin}
+    });
+    if(error) setLoginError(error.message);
+  };
+
+  const handleSaveProfile=async(data)=>{
+    if(!authUser)return;
+    setProfileSaving(true);
+    const {data:prof,error}=await sb.from('profiles').upsert({id:authUser.id,...data}).select().single();
+    if(error){showToast('Erro ao salvar perfil: '+error.message);setProfileSaving(false);return;}
+    setProfile(prof);
+    setAppState('app');
+    loadBooks();
+    loadChats(authUser.id);
+    setProfileSaving(false);
+  };
+
+  const handleLogout=async()=>{ await sb.auth.signOut(); };
+
+  const handlePublish=React.useCallback((book)=>{
+    setBooks(prev=>{
+      if(prev.find(b=>b.id===book.id)) return prev;
+      return [book,...prev];
+    });
+    go('publishSuccess',book);
+  },[go]);
+
+  const cur=stack[stack.length-1];
+  const rootTab=stack[0].screen;
+  const showNav=TABS.includes(cur.screen);
+
+  if(appState==='loading') return(
+    <PhoneShell showNav={false} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+      <LoadingScreen/>
+    </PhoneShell>
+  );
+
+  if(appState==='login') return(
+    <PhoneShell showNav={false} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+      <LoginScreen onLogin={handleLogin} error={loginError}/>
+    </PhoneShell>
+  );
+
+  if(appState==='register') return(
+    <PhoneShell showNav={false} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+      <RegisterScreen user={authUser} onSave={handleSaveProfile} loading={profileSaving}/>
+    </PhoneShell>
+  );
+
+  let screen;
+  switch(cur.screen){
+    case 'home':
+      screen=<HomeScreen go={go} favs={favs} toggleFav={toggleFav} books={books}/>;
+      break;
+    case 'search':
+      screen=<SearchScreen go={go} favs={favs} toggleFav={toggleFav} books={books}/>;
+      break;
+    case 'chat':
+      screen=<ChatListScreen go={go} chats={chats} profile={profile} sellers={sellers} books={books}/>;
+      break;
+    case 'profile':
+      screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={profile} onLogout={handleLogout} showToast={showToast}/>;
+      break;
+    case 'detail':
+      screen=<DetailScreen id={cur.params.id} back={back} go={go} favs={favs} toggleFav={toggleFav} books={books} profile={profile} sellers={sellers}/>;
+      break;
+    case 'sell':
+      screen=<SellScreen go={go} onPublish={handlePublish} profile={profile} showToast={showToast}/>;
+      break;
+    case 'checkout':
+      screen=<CheckoutScreen id={cur.params.id} back={back} go={go} books={books} profile={profile} showToast={showToast}/>;
+      break;
+    case 'chatThread':
+      screen=<ChatThreadScreen chatId={cur.params?.chatId} sellerId={cur.params?.sellerId} bookId={cur.params?.bookId} back={back} go={go} profile={profile} sellers={sellers} books={books} showToast={showToast}/>;
+      break;
+    case 'publishSuccess':{
+      const d=cur.params||{};
+      const {sellerReceives}=calcFees(d.price||0);
+      screen=(
+        <div style={{height:'100%',background:'var(--bg)',display:'flex',flexDirection:'column',padding:24,justifyContent:'center'}}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',flex:1,justifyContent:'center'}}>
+            <div style={{width:88,height:88,borderRadius:'50%',background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 14px 34px -12px var(--green-shadow)',marginBottom:22,animation:'pop .4s cubic-bezier(.2,1.3,.4,1)'}}>
+              <Icon name="check" size={44} color="#fff" strokeWidth={3.2}/>
+            </div>
+            <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4}}>Anúncio publicado!</div>
+            <div style={{fontSize:14.5,fontWeight:500,color:'var(--muted)',marginTop:10,maxWidth:290,lineHeight:1.5}}>"{d.title}" já está na vitrine.</div>
+            <div style={{fontSize:14.5,fontWeight:500,color:'var(--muted)',marginTop:6,maxWidth:290,lineHeight:1.5}}>Quando vender, você recebe <strong style={{color:'var(--green-d)'}}>{fmt(sellerReceives)}</strong> no Pix.</div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <Button kind="primary" full size="lg" onClick={()=>go('home')}>Ver na vitrine</Button>
+            <Button kind="ghost" full onClick={()=>go('sell')}>Anunciar outro</Button>
+          </div>
+        </div>
+      );
+      break;
+    }
+    default:
+      screen=<HomeScreen go={go} favs={favs} toggleFav={toggleFav} books={books}/>;
+  }
+
+  return(
+    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+      {screen}
+    </PhoneShell>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(err) {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>

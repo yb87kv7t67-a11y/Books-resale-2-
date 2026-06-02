@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#1f9d57"/>
+  <!-- Book shape -->
+  <g transform="translate(256,256)" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Book outline -->
+    <path d="M-110 130 C-110 144 -98 155 -84 155 L110 155 L110 -155 L-84 -155 C-98 -155 -110 -144 -110 -130 Z"
+          fill="rgba(255,255,255,0.15)" stroke="#ffffff" stroke-width="14"/>
+    <!-- Spine -->
+    <line x1="-84" y1="-155" x2="-84" y2="155" stroke="#ffffff" stroke-width="14"/>
+    <!-- Lines suggesting text -->
+    <line x1="-55" y1="-80" x2="85" y2="-80" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <line x1="-55" y1="-45" x2="85" y2="-45" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <line x1="-55" y1="-10" x2="85" y2="-10" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <line x1="-55" y1="25" x2="55" y2="25" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>
