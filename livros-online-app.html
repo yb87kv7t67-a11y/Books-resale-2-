@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Livros Online</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #e8e8ed; font-family: -apple-system, system-ui, sans-serif; }
+  #root { height: 100%; }
+  :root {
+    --green: #1f9d57; --green-d: color-mix(in oklab, #1f9d57, black 22%);
+    --green-shadow: color-mix(in oklab, #1f9d57, transparent 45%);
+    --blue: oklch(0.52 0.14 248); --blue-d: oklch(0.42 0.14 248);
+    --ink: #111827; --muted: #6b7280; --bg: #f5f5f7; --surface: #ffffff;
+    --line: rgba(0,0,0,0.09); --card-radius: 16px;
+  }
+  @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .ICONBTN { width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(0,0,0,0.06); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+// ─── DATA ───────────────────────────────────────────────────
+const SUBJECTS = [
+  { key: 'todos',      label: 'Todos',       hue: null },
+  { key: 'matematica', label: 'Matemática',  hue: 152 },
+  { key: 'portugues',  label: 'Português',   hue: 248 },
+  { key: 'literatura', label: 'Literatura',  hue: 25  },
+  { key: 'fisica',     label: 'Física',      hue: 200 },
+  { key: 'quimica',    label: 'Química',     hue: 300 },
+  { key: 'biologia',   label: 'Biologia',    hue: 135 },
+  { key: 'historia',   label: 'História',    hue: 50  },
+  { key: 'geografia',  label: 'Geografia',   hue: 175 },
+  { key: 'ingles',     label: 'Inglês',      hue: 270 },
+  { key: 'filosofia',  label: 'Filosofia',   hue: 15  },
+];
+const GRADES = ['1º ano', '2º ano', '3º ano', 'ENEM / Vestibular'];
+const CONDITIONS = {
+  novo:  { label: 'Como novo',  tone: 'green' },
+  bom:   { label: 'Bom estado', tone: 'blue'  },
+  usado: { label: 'Usado',      tone: 'neutral'},
+};
+const SELLERS = {
+  bia:   { name: 'Bia Carvalho',  initials: 'BC', color: 230, rating: 4.9, sales: 23, turma: '3º ano B' },
+  lucas: { name: 'Lucas Pereira', initials: 'LP', color: 152, rating: 4.7, sales: 11, turma: '2º ano A' },
+  duda:  { name: 'Duda Martins',  initials: 'DM', color: 25,  rating: 5.0, sales: 38, turma: '3º ano A' },
+  rafa:  { name: 'Rafael Souza',  initials: 'RS', color: 300, rating: 4.6, sales: 7,  turma: '1º ano C' },
+  manu:  { name: 'Manu Alves',    initials: 'MA', color: 50,  rating: 4.8, sales: 16, turma: '2º ano B' },
+};
+const BOOKS = [
+  { id:'b1',  title:'Matemática — Volume Único',           author:'Manoel Paiva',     subject:'matematica', grade:'3º ano',             condition:'bom',  price:68, seller:'bia',   delivery:'plataforma', faved:12 },
+  { id:'b2',  title:'Dom Casmurro',                        author:'Machado de Assis', subject:'literatura', grade:'ENEM / Vestibular',  condition:'novo', price:24, seller:'duda',  delivery:'vendedor',   faved:34 },
+  { id:'b3',  title:'Gramática da Língua Portuguesa',      author:'Sérgio Nogueira',  subject:'portugues',  grade:'2º ano',             condition:'bom',  price:45, seller:'lucas', delivery:'plataforma', faved:8  },
+  { id:'b4',  title:'Os Fundamentos da Física — Vol. 2',   author:'Ramalho',          subject:'fisica',     grade:'2º ano',             condition:'usado',price:39, seller:'manu',  delivery:'vendedor',   faved:5  },
+  { id:'b5',  title:'Química na Abordagem do Cotidiano',   author:'Tito & Canto',     subject:'quimica',    grade:'3º ano',             condition:'bom',  price:52, seller:'rafa',  delivery:'plataforma', faved:9  },
+  { id:'b6',  title:'Biologia das Células',                author:'Sônia Lopes',      subject:'biologia',   grade:'1º ano',             condition:'novo', price:58, seller:'bia',   delivery:'vendedor',   faved:14 },
+  { id:'b7',  title:'Vidas Secas',                         author:'Graciliano Ramos', subject:'literatura', grade:'ENEM / Vestibular',  condition:'usado',price:18, seller:'duda',  delivery:'plataforma', faved:27 },
+  { id:'b8',  title:'História Global — Brasil e Geral',    author:'Gilberto Cotrim',  subject:'historia',   grade:'3º ano',             condition:'bom',  price:49, seller:'lucas', delivery:'vendedor',   faved:6  },
+  { id:'b9',  title:'Geografia Geral e do Brasil',         author:'Lúcia Marina',     subject:'geografia',  grade:'2º ano',             condition:'usado',price:41, seller:'manu',  delivery:'plataforma', faved:4  },
+  { id:'b10', title:'English File — Intermediate',         author:'Oxford',           subject:'ingles',     grade:'1º ano',             condition:'novo', price:75, seller:'rafa',  delivery:'vendedor',   faved:11 },
+  { id:'b11', title:'Capitães da Areia',                   author:'Jorge Amado',      subject:'literatura', grade:'ENEM / Vestibular',  condition:'bom',  price:21, seller:'bia',   delivery:'plataforma', faved:19 },
+  { id:'b12', title:'Filosofando — Introdução à Filosofia',author:'Aranha & Martins', subject:'filosofia',  grade:'1º ano',             condition:'bom',  price:47, seller:'duda',  delivery:'vendedor',   faved:7  },
+  { id:'b13', title:'A Hora da Estrela',                   author:'Clarice Lispector',subject:'literatura', grade:'ENEM / Vestibular',  condition:'novo', price:26, seller:'manu',  delivery:'plataforma', faved:22 },
+  { id:'b14', title:'Matemática — Contexto & Aplicações',  author:'Dante',            subject:'matematica', grade:'1º ano',             condition:'usado',price:35, seller:'lucas', delivery:'vendedor',   faved:3  },
+];
+const CHATS = [
+  { id:'c1', book:'b1', with:'bia',   unread:2, last:'Boa! Pode ser amanhã no intervalo então 📚', time:'14:32',
+    msgs:[{from:'them',text:'Oi! Vi que você curtiu o livro de Matemática 😄',time:'14:20'},{from:'me',text:'Oi Bia! Sim, ainda tá disponível?',time:'14:25'},{from:'them',text:'Tá sim! Tá bem conservado, só tem o nome escrito na capa',time:'14:28'},{from:'me',text:'Perfeito. Consigo retirar amanhã?',time:'14:30'},{from:'them',text:'Boa! Pode ser amanhã no intervalo então 📚',time:'14:32'}]},
+  { id:'c2', book:'b7', with:'duda',  unread:0, last:'Você: combinado, fechado no Pix 🤝', time:'Ontem',
+    msgs:[{from:'me',text:'Oi Duda, o Vidas Secas ainda tá?',time:'Ontem'},{from:'them',text:'Tá sim! Esse vai pela entrega da plataforma',time:'Ontem'},{from:'me',text:'combinado, fechado no Pix 🤝',time:'Ontem'}]},
+  { id:'c3', book:'b10', with:'rafa', unread:0, last:'Rafael: te mando o estado das páginas', time:'Seg',
+    msgs:[{from:'them',text:'Fala! O English File é da edição nova viu',time:'Seg'},{from:'them',text:'te mando o estado das páginas',time:'Seg'}]},
+];
+const ME = { name:'Você', initials:'EU', color:152, rating:4.8, sales:9, turma:'3º ano B' };
+const FEE_RATE = 0.05;
+const LOGISTICS = 3.00;
+const TABS = ['home','search','chat','profile'];
+const fmt = n => 'R$ ' + n.toFixed(2).replace('.',',');
+const ICONBTN = { width:38,height:38,borderRadius:'50%',border:'none',background:'rgba(0,0,0,0.06)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 };
+
+// ─── ICON ───────────────────────────────────────────────────
+function Icon({ name, size=24, color='currentColor', strokeWidth=1.8, fill='none' }) {
+  const p = { fill, stroke:fill==='none'?color:'none', strokeWidth, strokeLinecap:'round', strokeLinejoin:'round' };
+  const paths = {
+    home:   <><path d="M3 10.5L12 3l9 7.5" {...p}/><path d="M5 9.5V20h14V9.5" {...p}/></>,
+    search: <><circle cx="11" cy="11" r="7" {...p}/><path d="M20 20l-3.5-3.5" {...p}/></>,
+    plus:   <><path d="M12 5v14M5 12h14" {...p}/></>,
+    chat:   <><path d="M4 5h16v11H9l-4 4V5z" {...p}/></>,
+    user:   <><circle cx="12" cy="8" r="4" {...p}/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" {...p}/></>,
+    heart:  <><path d="M12 20S4 14.5 4 9a4 4 0 017.5-2A4 4 0 0120 9c0 5.5-8 11-8 11z" {...p}/></>,
+    star:   <><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 20l1-6.1L3.2 9.5l6.1-.9L12 3z" {...p}/></>,
+    truck:  <><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z" {...p}/><circle cx="7" cy="17.5" r="1.8" {...p}/><circle cx="17.5" cy="17.5" r="1.8" {...p}/></>,
+    pin:    <><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" {...p}/><circle cx="12" cy="10" r="2.5" {...p}/></>,
+    camera: <><path d="M3 8h4l1.5-2h7L17 8h4v11H3z" {...p}/><circle cx="12" cy="13" r="3.5" {...p}/></>,
+    chevR:  <><path d="M9 5l7 7-7 7" {...p}/></>,
+    chevL:  <><path d="M15 5l-7 7 7 7" {...p}/></>,
+    filter: <><path d="M3 5h18M6 12h12M10 19h4" {...p}/></>,
+    check:  <><path d="M4 12.5l5 5 11-11" {...p}/></>,
+    checkC: <><circle cx="12" cy="12" r="9" {...p}/><path d="M8 12.5l2.5 2.5 5-5.5" {...p}/></>,
+    close:  <><path d="M6 6l12 12M18 6L6 18" {...p}/></>,
+    arrow:  <><path d="M5 12h14M13 6l6 6-6 6" {...p}/></>,
+    shield: <><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" {...p}/><path d="M9 12l2 2 4-4" {...p}/></>,
+    tag:    <><path d="M3 12V4h8l9 9-8 8-9-9z" {...p}/><circle cx="7.5" cy="7.5" r="1.3" fill={color} stroke="none"/></>,
+    send:   <><path d="M4 12l16-7-7 16-2.5-6.5L4 12z" {...p}/></>,
+    wallet: <><path d="M3 7h15a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" {...p}/><path d="M3 7l13-3v3" {...p}/><circle cx="17" cy="13" r="1.4" fill={color} stroke="none"/></>,
+    bolt:   <><path d="M13 3L5 13h6l-1 8 8-11h-6l1-7z" {...p}/></>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24">{paths[name]}</svg>;
+}
+
+// ─── SHARED COMPONENTS ──────────────────────────────────────
+function BookCover({ book, radius=16, big=false }) {
+  const subj = SUBJECTS.find(s => s.key === book.subject) || { hue:220 };
+  const h = subj.hue;
+  return (
+    <div style={{ position:'relative', width:'100%', aspectRatio:'1/1', borderRadius:radius,
+      background:`oklch(0.95 0.03 ${h})`, overflow:'hidden', display:'flex', flexDirection:'column',
+      justifyContent:'flex-end', padding:big?22:14 }}>
+      <div style={{ position:'absolute', left:big?18:11, top:0, bottom:0, width:big?6:4, background:`oklch(0.62 0.13 ${h})`, opacity:0.85 }}/>
+      <div style={{ position:'absolute', top:big?20:13, left:big?36:24, right:14, fontSize:big?13:10, fontWeight:700, letterSpacing:0.6, textTransform:'uppercase', color:`oklch(0.62 0.13 ${h})` }}>{SUBJECTS.find(s=>s.key===book.subject)?.label}</div>
+      <div style={{ paddingLeft:big?16:10 }}>
+        <div style={{ fontSize:big?25:15, lineHeight:1.12, fontWeight:800, color:`oklch(0.34 0.08 ${h})`, textWrap:'balance', display:'-webkit-box', WebkitLineClamp:big?5:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{book.title}</div>
+        <div style={{ fontSize:big?14:10.5, fontWeight:600, color:`oklch(0.34 0.08 ${h})`, opacity:0.65, marginTop:big?8:5 }}>{book.author}</div>
+      </div>
+    </div>
+  );
+}
+
+function Avatar({ seller, size=38 }) {
+  return (
+    <div style={{ width:size, height:size, borderRadius:'50%', flexShrink:0, background:`oklch(0.9 0.05 ${seller.color})`, color:`oklch(0.42 0.1 ${seller.color})`, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:size*0.36 }}>
+      {seller.initials}
+    </div>
+  );
+}
+
+function Rating({ value, size=13 }) {
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:3, color:'oklch(0.7 0.13 75)' }}>
+      <Icon name="star" size={size} fill="oklch(0.74 0.14 75)" color="oklch(0.74 0.14 75)"/>
+      <span style={{ fontSize:size, fontWeight:700, color:'var(--ink)' }}>{value.toFixed(1)}</span>
+    </span>
+  );
+}
+
+function Button({ children, kind='primary', full, onClick, size='md', disabled }) {
+  const heights = { md:50, lg:56, sm:40 };
+  const pads = { md:'0 18px', lg:'0 22px', sm:'0 14px' };
+  const kinds = {
+    primary:   { background:'var(--green)', color:'#fff', boxShadow:'0 6px 16px -6px var(--green-shadow)' },
+    blue:      { background:'var(--blue)',  color:'#fff' },
+    secondary: { background:'var(--surface)', color:'var(--ink)', boxShadow:'inset 0 0 0 1.5px var(--line)' },
+    ghost:     { background:'transparent', color:'var(--green-d)' },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} style={{ ...kinds[kind], height:heights[size], padding:pads[size], borderRadius:14, border:'none', cursor:disabled?'not-allowed':'pointer', fontWeight:700, fontSize:size==='lg'?17:15.5, width:full?'100%':undefined, fontFamily:'inherit', opacity:disabled?0.5:1, display:'inline-flex', alignItems:'center', justifyContent:'center', gap:9 }}>
+      {children}
+    </button>
+  );
+}
+
+function FilterPill({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{ flexShrink:0, height:36, padding:'0 16px', borderRadius:999, cursor:'pointer', fontFamily:'inherit', fontSize:14, fontWeight:700, whiteSpace:'nowrap', border:'none', background:active?'var(--ink)':'var(--surface)', color:active?'#fff':'var(--muted)', boxShadow:active?'none':'inset 0 0 0 1.5px var(--line)' }}>
+      {label}
+    </button>
+  );
+}
+
+function DeliveryTag({ type, small }) {
+  const isP = type === 'plataforma';
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:small?11:12.5, fontWeight:700, color:isP?'var(--green-d)':'var(--blue-d)' }}>
+      <Icon name={isP?'truck':'pin'} size={small?14:16}/>
+      {isP?'Entrega Livros Online':'Retirada na escola'}
+    </span>
+  );
+}
+
+function ConditionBadge({ condition, small }) {
+  const c = CONDITIONS[condition];
+  const tones = { green:{bg:'oklch(0.95 0.05 152)',fg:'oklch(0.45 0.11 152)'}, blue:{bg:'oklch(0.95 0.04 248)',fg:'oklch(0.48 0.12 248)'}, neutral:{bg:'oklch(0.94 0.004 250)',fg:'oklch(0.45 0.01 250)'} };
+  const t = tones[c.tone];
+  return <span style={{ display:'inline-flex', alignItems:'center', background:t.bg, color:t.fg, fontSize:small?11:12, fontWeight:700, padding:small?'3px 8px':'4px 10px', borderRadius:999 }}>{c.label}</span>;
+}
+
+// ─── HOME CARD ───────────────────────────────────────────────
+function HomeCard({ book, onOpen, faved, toggleFav }) {
+  return (
+    <div onClick={() => onOpen(book.id)} style={{ borderRadius:'var(--card-radius)', background:'var(--surface)', boxShadow:'0 2px 12px rgba(0,0,0,0.07)', cursor:'pointer', overflow:'hidden', animation:'fadeIn .25s ease' }}>
+      <div style={{ position:'relative', padding:10, paddingBottom:0 }}>
+        <BookCover book={book}/>
+        <button onClick={e => { e.stopPropagation(); toggleFav(book.id); }} style={{ position:'absolute', top:18, right:18, width:32, height:32, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.85)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <Icon name="heart" size={17} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--muted)'}/>
+        </button>
+      </div>
+      <div style={{ padding:'10px 12px 14px' }}>
+        <div style={{ fontSize:13.5, fontWeight:800, color:'var(--ink)', lineHeight:1.25, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', marginBottom:6 }}>{book.title}</div>
+        <div style={{ fontSize:17, fontWeight:800, color:'var(--green-d)', marginBottom:5 }}>{fmt(book.price)}</div>
+        <DeliveryTag type={book.delivery} small/>
+        <div style={{ marginTop:5 }}><ConditionBadge condition={book.condition} small/></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME SCREEN ─────────────────────────────────────────────
+function HomeScreen({ go, favs, toggleFav, showPromo }) {
+  const [subject, setSubject] = React.useState('todos');
+  const list = BOOKS.filter(b => subject === 'todos' || b.subject === subject);
+  return (
+    <div style={{ background:'var(--bg)', minHeight:'100%' }}>
+      <div style={{ padding:'58px 18px 14px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:24, fontWeight:800, color:'var(--ink)', letterSpacing:-0.5 }}>Livros Online</div>
+            <div style={{ fontSize:13, fontWeight:600, color:'var(--muted)', marginTop:1 }}>Escola Alemã Corcovado</div>
+          </div>
+          <button onClick={() => go('search')} style={ICONBTN}><Icon name="search" size={21} color="var(--ink)"/></button>
+        </div>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', scrollbarWidth:'none', paddingBottom:2 }}>
+          {SUBJECTS.map(s => <FilterPill key={s.key} label={s.label} active={subject===s.key} onClick={()=>setSubject(s.key)}/>)}
+        </div>
+      </div>
+
+      <div style={{ padding:18 }}>
+        {showPromo && (
+          <div onClick={() => go('sell')} style={{ borderRadius:18, background:`linear-gradient(120deg, var(--green-d), oklch(0.52 0.14 180))`, padding:'18px 20px', marginBottom:22, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:'#fff', marginBottom:4 }}>Tem livros parados?</div>
+              <div style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.8)' }}>Anuncie agora e receba no Pix</div>
+            </div>
+            <div style={{ width:44, height:44, borderRadius:13, background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <Icon name="arrow" size={22} color="#fff"/>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div style={{ fontSize:17, fontWeight:800, color:'var(--ink)' }}>
+            {subject === 'todos' ? 'Todos os livros' : SUBJECTS.find(s=>s.key===subject)?.label}
+          </div>
+          <span style={{ fontSize:13, fontWeight:600, color:'var(--muted)' }}>{list.length} anúncios</span>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+          {list.map(b => <HomeCard key={b.id} book={b} onOpen={id=>go('detail',{id})} faved={favs.includes(b.id)} toggleFav={toggleFav}/>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DETAIL SCREEN ───────────────────────────────────────────
+function DetailScreen({ id, back, go, favs, toggleFav }) {
+  const book = BOOKS.find(b => b.id === id);
+  const seller = SELLERS[book.seller];
+  const faved = favs.includes(book.id);
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)' }}>
+      <div style={{ position:'relative' }}>
+        <div style={{ padding:'54px 18px 18px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)', display:'flex', alignItems:'center', gap:12 }}>
+          <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+          <span style={{ fontSize:17, fontWeight:800, color:'var(--ink)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>Detalhe</span>
+          <button onClick={() => toggleFav(book.id)} style={ICONBTN}><Icon name="heart" size={21} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--ink)'}/></button>
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflow:'auto', padding:18 }}>
+        <div style={{ maxWidth:260, margin:'0 auto 20px', animation:'fadeIn .3s ease' }}>
+          <BookCover book={book} big/>
+        </div>
+
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--ink)', letterSpacing:-0.3, lineHeight:1.2, marginBottom:6 }}>{book.title}</div>
+        <div style={{ fontSize:14, fontWeight:600, color:'var(--muted)', marginBottom:14 }}>{book.author} · {book.grade}</div>
+
+        <div style={{ display:'flex', gap:8, marginBottom:18, flexWrap:'wrap' }}>
+          <ConditionBadge condition={book.condition}/>
+          <DeliveryTag type={book.delivery}/>
+        </div>
+
+        <div style={{ fontSize:30, fontWeight:800, color:'var(--green-d)', marginBottom:20 }}>{fmt(book.price)}</div>
+
+        <div style={{ borderRadius:16, background:'var(--surface)', boxShadow:'inset 0 0 0 1.5px var(--line)', padding:16, marginBottom:20 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'var(--muted)', marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 }}>Vendedor</div>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <Avatar seller={seller} size={46}/>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:15.5, fontWeight:800, color:'var(--ink)' }}>{seller.name}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:3 }}>
+                <Rating value={seller.rating} size={13}/>
+                <span style={{ fontSize:12.5, fontWeight:600, color:'var(--muted)' }}>· {seller.sales} vendas · {seller.turma}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'0 4px', marginBottom:20 }}>
+          <Icon name="shield" size={18} color="var(--green)" style={{ flexShrink:0, marginTop:1 }}/>
+          <span style={{ fontSize:12.5, fontWeight:500, color:'var(--muted)', lineHeight:1.45 }}>
+            {book.delivery === 'plataforma' ? 'A Livros Online garante a entrega e só libera o pagamento quando você confirmar o recebimento.' : 'Combine a retirada pelo chat. O pagamento é liberado ao vendedor só após sua confirmação.'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding:'12px 18px', background:'var(--surface)', boxShadow:'0 -1px 0 var(--line)', display:'flex', gap:10 }}>
+        <Button kind="secondary" onClick={() => go('chatThread', { seller: book.seller, book: book.id })} style={{ flex:1 }}>Chat</Button>
+        <Button kind="primary" onClick={() => go('checkout', { id: book.id })} style={{ flex:2 }}>Comprar · {fmt(book.price)}</Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────
+function SearchScreen({ go, favs, toggleFav }) {
+  const [q, setQ] = React.useState('');
+  const [grade, setGrade] = React.useState(null);
+  const inputRef = React.useRef(null);
+  React.useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
+  const ql = q.trim().toLowerCase();
+  let list = BOOKS.filter(b => !ql || b.title.toLowerCase().includes(ql) || b.author.toLowerCase().includes(ql));
+  if (grade) list = list.filter(b => b.grade === grade);
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)' }}>
+      <div style={{ paddingTop:54, padding:'54px 14px 12px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <button onClick={() => go('home')} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+          <div style={{ flex:1, height:44, borderRadius:13, background:'var(--bg)', display:'flex', alignItems:'center', gap:9, padding:'0 14px' }}>
+            <Icon name="search" size={19} color="var(--muted)"/>
+            <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar livro, matéria, autor…" style={{ flex:1, border:'none', background:'transparent', outline:'none', fontFamily:'inherit', fontSize:15.5, fontWeight:600, color:'var(--ink)' }}/>
+            {q && <button onClick={()=>setQ('')} style={{ border:'none', background:'none', cursor:'pointer', padding:0 }}><Icon name="close" size={18} color="var(--muted)"/></button>}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', marginTop:12, scrollbarWidth:'none' }}>
+          <FilterPill label="Todas as séries" active={!grade} onClick={()=>setGrade(null)}/>
+          {GRADES.map(g => <FilterPill key={g} label={g} active={grade===g} onClick={()=>setGrade(g)}/>)}
+        </div>
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:18 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'var(--muted)', marginBottom:14 }}>{list.length} resultado{list.length!==1?'s':''}</div>
+        {list.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'50px 20px', color:'var(--muted)' }}>
+            <Icon name="search" size={40} color="var(--line)"/>
+            <div style={{ fontSize:15, fontWeight:700, marginTop:12, color:'var(--ink)' }}>Nada encontrado</div>
+          </div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
+            {list.map(b => <HomeCard key={b.id} book={b} onOpen={id=>go('detail',{id})} faved={favs.includes(b.id)} toggleFav={toggleFav}/>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CHAT ────────────────────────────────────────────────────
+function ChatListScreen({ go }) {
+  return (
+    <div style={{ height:'100%', background:'var(--bg)' }}>
+      <div style={{ paddingTop:56, padding:'56px 18px 14px' }}>
+        <div style={{ fontSize:28, fontWeight:800, color:'var(--ink)', letterSpacing:-0.5 }}>Conversas</div>
+      </div>
+      <div style={{ padding:'0 18px' }}>
+        {CHATS.map(c => {
+          const s = SELLERS[c.with]; const book = BOOKS.find(b=>b.id===c.book);
+          return (
+            <button key={c.id} onClick={() => go('chatThread', { seller:c.with, book:c.book })} style={{ width:'100%', textAlign:'left', display:'flex', alignItems:'center', gap:13, padding:'13px 0', border:'none', background:'none', cursor:'pointer', borderBottom:'1px solid var(--line)', fontFamily:'inherit' }}>
+              <div style={{ position:'relative' }}>
+                <Avatar seller={s} size={50}/>
+                {c.unread > 0 && <span style={{ position:'absolute', top:-2, right:-2, minWidth:20, height:20, borderRadius:999, background:'var(--green)', color:'#fff', fontSize:11.5, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 5px', boxShadow:'0 0 0 2px var(--bg)' }}>{c.unread}</span>}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+                  <span style={{ fontSize:15.5, fontWeight:800, color:'var(--ink)' }}>{s.name}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:'var(--muted)' }}>{c.time}</span>
+                </div>
+                <div style={{ fontSize:12, fontWeight:600, color:'var(--green-d)', margin:'2px 0 3px' }}>📕 {book.title}</div>
+                <div style={{ fontSize:13.5, fontWeight:c.unread?700:500, color:c.unread?'var(--ink)':'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.last}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChatThreadScreen({ seller, book, back, go }) {
+  const s = SELLERS[seller]; const bk = BOOKS.find(b=>b.id===book);
+  const existing = CHATS.find(c=>c.with===seller&&c.book===book);
+  const [msgs, setMsgs] = React.useState(existing ? existing.msgs : []);
+  const [draft, setDraft] = React.useState('');
+  const scrollRef = React.useRef(null);
+  React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs]);
+  const send = () => {
+    if (!draft.trim()) return;
+    setMsgs(m => [...m, { from:'me', text:draft.trim(), time:'agora' }]);
+    setDraft('');
+    setTimeout(() => setMsgs(m => [...m, { from:'them', text:'Show! Pode fechar pelo Pix então 🤝', time:'agora' }]), 900);
+  };
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)' }}>
+      <div style={{ paddingTop:54, padding:'54px 14px 11px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)', display:'flex', alignItems:'center', gap:11 }}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <Avatar seller={s} size={40}/>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15.5, fontWeight:800, color:'var(--ink)' }}>{s.name}</div>
+          <div style={{ fontSize:12, fontWeight:600, color:'var(--green)' }}>● online agora</div>
+        </div>
+      </div>
+      <button onClick={() => go('detail', { id:book })} style={{ display:'flex', alignItems:'center', gap:12, margin:'12px 14px 0', padding:10, borderRadius:14, background:'var(--surface)', boxShadow:'inset 0 0 0 1.5px var(--line)', cursor:'pointer', fontFamily:'inherit', textAlign:'left', border:'none' }}>
+        <div style={{ width:44, height:44, borderRadius:9, overflow:'hidden', flexShrink:0 }}><BookCover book={bk} radius={9}/></div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'var(--ink)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{bk.title}</div>
+          <div style={{ fontSize:14, fontWeight:800, color:'var(--green-d)' }}>{fmt(bk.price)}</div>
+        </div>
+        <Icon name="chevR" size={18} color="var(--muted)"/>
+      </button>
+      <div ref={scrollRef} style={{ flex:1, overflow:'auto', padding:'16px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+        {msgs.map((m,i) => (
+          <div key={i} style={{ alignSelf:m.from==='me'?'flex-end':'flex-start', maxWidth:'78%' }}>
+            <div style={{ padding:'10px 14px', borderRadius:18, fontSize:14.5, fontWeight:500, lineHeight:1.4, background:m.from==='me'?'var(--green)':'var(--surface)', color:m.from==='me'?'#fff':'var(--ink)', borderBottomRightRadius:m.from==='me'?5:18, borderBottomLeftRadius:m.from==='me'?18:5, boxShadow:m.from==='me'?'none':'inset 0 0 0 1.5px var(--line)' }}>{m.text}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding:'10px 14px 22px', background:'var(--surface)', boxShadow:'0 -1px 0 var(--line)', display:'flex', gap:9, alignItems:'center' }}>
+        <input value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Mensagem…" style={{ flex:1, height:46, borderRadius:23, border:'none', background:'var(--bg)', padding:'0 16px', fontFamily:'inherit', fontSize:15, fontWeight:500, outline:'none', color:'var(--ink)' }}/>
+        <button onClick={send} style={{ width:46, height:46, borderRadius:'50%', border:'none', cursor:'pointer', background:'var(--green)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Icon name="send" size={20} color="#fff" fill="#fff"/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── SELL ────────────────────────────────────────────────────
+function SellScreen({ go, onPublish }) {
+  const [photo, setPhoto] = React.useState(false);
+  const [title, setTitle] = React.useState('');
+  const [subject, setSubject] = React.useState('matematica');
+  const [grade, setGrade] = React.useState('1º ano');
+  const [condition, setCondition] = React.useState('bom');
+  const [priceStr, setPriceStr] = React.useState('45');
+  const [delivery, setDelivery] = React.useState('plataforma');
+  const price = Math.max(0, parseFloat(priceStr.replace(',','.')) || 0);
+  const fee = price * FEE_RATE;
+  const recP = Math.max(0, price - fee - LOGISTICS);
+  const recV = Math.max(0, price - fee);
+  const recebe = delivery === 'plataforma' ? recP : recV;
+  const INPUT = { width:'100%', height:50, borderRadius:13, border:'none', boxShadow:'inset 0 0 0 1.5px var(--line)', background:'var(--surface)', padding:'0 15px', fontSize:15.5, fontFamily:'inherit', fontWeight:600, color:'var(--ink)', outline:'none', boxSizing:'border-box' };
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)' }}>
+      <div style={{ padding:'54px 18px 12px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)', display:'flex', alignItems:'center', gap:12 }}>
+        <button onClick={() => go('home')} style={ICONBTN}><Icon name="close" size={21} color="var(--ink)"/></button>
+        <span style={{ fontSize:18, fontWeight:800, color:'var(--ink)' }}>Anunciar livro</span>
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:18, display:'flex', flexDirection:'column', gap:20 }}>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Foto do livro</label>
+          <button onClick={() => setPhoto(!photo)} style={{ width:'100%', aspectRatio:'16/9', borderRadius:16, cursor:'pointer', border:photo?'none':'2px dashed var(--line)', background:photo?'oklch(0.95 0.05 152)':'var(--surface)', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', padding:0 }}>
+            {photo ? <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}><Icon name="checkC" size={26} color="var(--green-d)"/><span style={{ fontSize:13, fontWeight:700, color:'var(--green-d)' }}>foto adicionada</span></div>
+                   : <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, color:'var(--muted)' }}><Icon name="camera" size={28}/><span style={{ fontSize:13.5, fontWeight:700 }}>Tirar foto ou galeria</span></div>}
+          </button>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Título do livro</label>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Matemática — Volume Único" style={INPUT}/>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Matéria</label>
+          <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:2, scrollbarWidth:'none' }}>
+            {SUBJECTS.filter(s=>s.key!=='todos').map(s => <FilterPill key={s.key} label={s.label} active={subject===s.key} onClick={()=>setSubject(s.key)}/>)}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Série</label>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {GRADES.map(g => <button key={g} onClick={()=>setGrade(g)} style={{ flex:1, minWidth:80, height:44, borderRadius:12, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13.5, fontWeight:700, background:grade===g?'var(--ink)':'var(--surface)', color:grade===g?'#fff':'var(--muted)', boxShadow:grade===g?'none':'inset 0 0 0 1.5px var(--line)' }}>{g}</button>)}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Estado</label>
+          <div style={{ display:'flex', gap:8 }}>
+            {Object.entries(CONDITIONS).map(([k,v]) => <button key={k} onClick={()=>setCondition(k)} style={{ flex:1, height:44, borderRadius:12, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:14, fontWeight:700, background:condition===k?'var(--ink)':'var(--surface)', color:condition===k?'#fff':'var(--muted)', boxShadow:condition===k?'none':'inset 0 0 0 1.5px var(--line)' }}>{v.label}</button>)}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:8 }}>Preço</label>
+          <div style={{ position:'relative' }}>
+            <span style={{ position:'absolute', left:15, top:'50%', transform:'translateY(-50%)', fontSize:16, fontWeight:800, color:'var(--muted)' }}>R$</span>
+            <input value={priceStr} onChange={e=>setPriceStr(e.target.value.replace(/[^0-9.,]/g,''))} inputMode="decimal" style={{ ...INPUT, paddingLeft:46, fontSize:18, fontWeight:800 }}/>
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize:13, fontWeight:800, color:'var(--ink)', display:'block', marginBottom:10 }}>Como entregar?</label>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {[{v:'plataforma',icon:'truck',title:'Livros Online entrega',sub:'A gente busca e entrega. Mais fácil.',badge:'mais fácil',rec:recP},{v:'vendedor',icon:'pin',title:'Eu mesmo entrego',sub:'Combina pelo chat. Recebe mais.',badge:'recebe mais',rec:recV}].map(o => (
+              <button key={o.v} onClick={()=>setDelivery(o.v)} style={{ textAlign:'left', width:'100%', cursor:'pointer', fontFamily:'inherit', border:'none', borderRadius:16, padding:15, background:'var(--surface)', boxShadow:delivery===o.v?'inset 0 0 0 2px var(--green)':'inset 0 0 0 1.5px var(--line)' }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                  <div style={{ width:40, height:40, borderRadius:11, flexShrink:0, background:delivery===o.v?'var(--green)':'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={o.icon} size={21} color={delivery===o.v?'#fff':'var(--muted)'}/></div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:'var(--ink)', marginBottom:3 }}>{o.title} <span style={{ fontSize:10.5, fontWeight:800, color:'var(--green-d)', background:'oklch(0.95 0.04 152)', padding:'2px 7px', borderRadius:999 }}>{o.badge}</span></div>
+                    <div style={{ fontSize:12.5, fontWeight:500, color:'var(--muted)', lineHeight:1.4 }}>{o.sub}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop:12, paddingTop:12, borderTop:'1px dashed var(--line)', display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+                  <span style={{ fontSize:12.5, fontWeight:600, color:'var(--muted)' }}>Você recebe</span>
+                  <span style={{ fontSize:19, fontWeight:800, color:delivery===o.v?'var(--green-d)':'var(--ink)' }}>{fmt(o.rec)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ borderRadius:16, background:'var(--surface)', boxShadow:'inset 0 0 0 1.5px var(--line)', padding:16 }}>
+          {[['Preço do anúncio', fmt(price), false], ['Taxa Livros Online (5%)', '– '+fmt(fee), true], ...(delivery==='plataforma'?[['Logística', '– '+fmt(LOGISTICS), true]]:[])].map(([k,v,m]) => (
+            <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+              <span style={{ fontSize:13.5, fontWeight:600, color:'var(--muted)' }}>{k}</span>
+              <span style={{ fontSize:14.5, fontWeight:700, color:m?'var(--muted)':'var(--ink)' }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ height:1, background:'var(--line)', margin:'8px 0' }}/>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+            <span style={{ fontSize:15, fontWeight:800, color:'var(--ink)' }}>Você recebe no Pix</span>
+            <span style={{ fontSize:22, fontWeight:800, color:'var(--green-d)' }}>{fmt(recebe)}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding:'12px 18px 22px', background:'var(--surface)', boxShadow:'0 -1px 0 var(--line)' }}>
+        <Button kind="primary" full size="lg" disabled={price<=0} onClick={() => onPublish({ title:title||'Seu livro', subject, grade, condition, price, delivery })}>Publicar anúncio</Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── PAY ─────────────────────────────────────────────────────
+function FakeQR({ size=160 }) {
+  const N=21, cell=size/N;
+  const cells=[]; let seed=7;
+  const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+  const finder=(r,c)=>(r<7&&c<7)||(r<7&&c>=N-7)||(r>=N-7&&c<7);
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++) { if(finder(r,c)) continue; if(rnd()>0.55) cells.push(<rect key={r+'-'+c} x={c*cell} y={r*cell} width={cell} height={cell} rx={cell*0.2} fill="var(--ink)"/>); }
+  const Finder=({x,y})=>(<g><rect x={x*cell} y={y*cell} width={cell*7} height={cell*7} rx={cell*1.6} fill="var(--ink)"/><rect x={(x+1)*cell} y={(y+1)*cell} width={cell*5} height={cell*5} rx={cell} fill="#fff"/><rect x={(x+2)*cell} y={(y+2)*cell} width={cell*3} height={cell*3} rx={cell*0.6} fill="var(--ink)"/></g>);
+  return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{cells}<Finder x={0} y={0}/><Finder x={N-7} y={0}/><Finder x={0} y={N-7}/></svg>;
+}
+
+function CheckoutScreen({ id, back, onPaid }) {
+  const book = BOOKS.find(b=>b.id===id);
+  const [copied, setCopied] = React.useState(false);
+  const isP = book.delivery === 'plataforma';
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)' }}>
+      <div style={{ padding:'54px 14px 12px', background:'var(--surface)', boxShadow:'0 1px 0 var(--line)', display:'flex', alignItems:'center', gap:12 }}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <span style={{ fontSize:18, fontWeight:800, color:'var(--ink)' }}>Pagar com Pix</span>
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:18, display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ display:'flex', gap:13, padding:14, borderRadius:16, background:'var(--surface)', boxShadow:'inset 0 0 0 1.5px var(--line)' }}>
+          <div style={{ width:54, height:54, borderRadius:11, overflow:'hidden', flexShrink:0 }}><BookCover book={book} radius={11}/></div>
+          <div style={{ flex:1 }}><div style={{ fontSize:14.5, fontWeight:800, color:'var(--ink)', lineHeight:1.2, marginBottom:5 }}>{book.title}</div><DeliveryTag type={book.delivery} small/></div>
+          <div style={{ fontSize:18, fontWeight:800, color:'var(--ink)' }}>{fmt(book.price)}</div>
+        </div>
+        <div style={{ background:'var(--surface)', borderRadius:20, padding:22, boxShadow:'inset 0 0 0 1.5px var(--line)', display:'flex', flexDirection:'column', alignItems:'center' }}>
+          <div style={{ fontSize:13.5, fontWeight:700, color:'var(--muted)' }}>Escaneie para pagar</div>
+          <div style={{ fontSize:30, fontWeight:800, color:'var(--green-d)', margin:'4px 0 16px' }}>{fmt(book.price)}</div>
+          <div style={{ padding:14, borderRadius:16, background:'#fff', boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)' }}><FakeQR/></div>
+          <button onClick={()=>{setCopied(true);setTimeout(()=>setCopied(false),1800);}} style={{ marginTop:16, height:46, width:'100%', borderRadius:13, border:'none', cursor:'pointer', background:copied?'oklch(0.95 0.05 152)':'var(--bg)', color:copied?'var(--green-d)':'var(--ink)', fontFamily:'inherit', fontSize:14.5, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <Icon name={copied?'check':'tag'} size={18}/>{copied?'Código Pix copiado!':'Copiar código Pix'}
+          </button>
+        </div>
+        <div style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'0 4px' }}>
+          <Icon name="shield" size={18} color="var(--green)"/>
+          <span style={{ fontSize:12.5, fontWeight:500, color:'var(--muted)', lineHeight:1.45 }}>{isP?'O vendedor só recebe quando você confirmar que pegou o livro.':'Combine a retirada pelo chat. Confirme o recebimento no app para liberar o pagamento.'}</span>
+        </div>
+      </div>
+      <div style={{ padding:'12px 18px 22px', background:'var(--surface)', boxShadow:'0 -1px 0 var(--line)' }}>
+        <Button kind="primary" full size="lg" onClick={()=>onPaid(id)}>Já fiz o pagamento</Button>
+      </div>
+    </div>
+  );
+}
+
+function SuccessScreen({ title, lines, primaryLabel, onPrimary, secondaryLabel, onSecondary }) {
+  return (
+    <div style={{ height:'100%', background:'var(--bg)', display:'flex', flexDirection:'column', padding:24, justifyContent:'center' }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', flex:1, justifyContent:'center' }}>
+        <div style={{ width:88, height:88, borderRadius:'50%', background:'var(--green)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 14px 34px -12px var(--green-shadow)', marginBottom:22, animation:'pop .4s cubic-bezier(.2,1.3,.4,1)' }}>
+          <Icon name="check" size={44} color="#fff" strokeWidth={3.2}/>
+        </div>
+        <div style={{ fontSize:24, fontWeight:800, color:'var(--ink)', letterSpacing:-0.4 }}>{title}</div>
+        {lines.map((l,i) => <div key={i} style={{ fontSize:14.5, fontWeight:500, color:'var(--muted)', marginTop:i===0?10:6, maxWidth:290, lineHeight:1.5 }}>{l}</div>)}
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        <Button kind="primary" full size="lg" onClick={onPrimary}>{primaryLabel}</Button>
+        {secondaryLabel && <Button kind="ghost" full onClick={onSecondary}>{secondaryLabel}</Button>}
+      </div>
+    </div>
+  );
+}
+
+// ─── PROFILE ─────────────────────────────────────────────────
+function ProfileScreen({ go }) {
+  return (
+    <div style={{ height:'100%', background:'var(--bg)', overflow:'auto' }}>
+      <div style={{ padding:'56px 18px 18px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <Avatar seller={ME} size={58}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:20, fontWeight:800, color:'var(--ink)' }}>{ME.name}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginTop:3 }}>
+              <Rating value={ME.rating} size={13}/>
+              <span style={{ fontSize:13, fontWeight:600, color:'var(--muted)' }}>· {ME.turma}</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop:18, borderRadius:20, padding:20, color:'#fff', position:'relative', overflow:'hidden', background:'linear-gradient(120deg, oklch(0.42 0.1 248) 0%, var(--green-d) 110%)', boxShadow:'0 12px 26px -14px oklch(0.42 0.1 248 / 0.8)' }}>
+          <div style={{ position:'absolute', right:-20, top:-20, width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.08)' }}/>
+          <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, fontWeight:600, opacity:0.9 }}><Icon name="wallet" size={17} color="#fff"/> Saldo disponível para sacar</div>
+          <div style={{ fontSize:34, fontWeight:800, letterSpacing:-0.5, marginTop:6 }}>R$ 142,30</div>
+          <button style={{ marginTop:16, height:44, width:'100%', borderRadius:12, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:800, fontSize:14.5, background:'#fff', color:'var(--green-d)', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>
+            <Icon name="bolt" size={17} fill="var(--green-d)" color="var(--green-d)"/> Sacar via Pix
+          </button>
+        </div>
+        <div style={{ display:'flex', marginTop:16, padding:'16px 8px', borderRadius:16, background:'var(--surface)', boxShadow:'inset 0 0 0 1.5px var(--line)' }}>
+          {[['9','Vendas'],['2','Anúncios ativos'],['4,8','Avaliação']].map(([v,l],i,a) => (
+            <React.Fragment key={l}>
+              <div style={{ flex:1, textAlign:'center' }}>
+                <div style={{ fontSize:20, fontWeight:800, color:'var(--ink)' }}>{v}</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', marginTop:2 }}>{l}</div>
+              </div>
+              {i < a.length-1 && <div style={{ width:1, background:'var(--line)' }}/>}
+            </React.Fragment>
+          ))}
+        </div>
+        <div style={{ marginTop:22, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontSize:17, fontWeight:800, color:'var(--ink)' }}>Meus anúncios</div>
+          <button onClick={() => go('sell')} style={{ display:'flex', alignItems:'center', gap:4, border:'none', background:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13.5, fontWeight:800, color:'var(--green-d)' }}><Icon name="plus" size={16}/> Novo</button>
+        </div>
+        <div style={{ marginTop:6 }}>
+          {[{b:BOOKS[1],sold:false},{b:BOOKS[6],sold:false},{b:BOOKS[10],sold:true}].map(({b,sold}) => (
+            <div key={b.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 0', borderBottom:'1px solid var(--line)' }}>
+              <div style={{ width:44, height:44, borderRadius:9, overflow:'hidden', flexShrink:0 }}><BookCover book={b} radius={9}/></div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:800, color:'var(--ink)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.title}</div>
+                <div style={{ fontSize:13.5, fontWeight:800, color:'var(--green-d)', marginTop:4 }}>{fmt(b.price)}</div>
+              </div>
+              <span style={{ fontSize:11.5, fontWeight:800, padding:'4px 10px', borderRadius:999, background:sold?'var(--bg)':'oklch(0.95 0.05 152)', color:sold?'var(--muted)':'var(--green-d)' }}>{sold?'Vendido':'Ativo'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTOM NAV ──────────────────────────────────────────────
+function BottomNav({ current, go }) {
+  const items = [
+    { key:'home',    icon:'home',   label:'Início'  },
+    { key:'search',  icon:'search', label:'Buscar'  },
+    { key:'sell',    center:true },
+    { key:'chat',    icon:'chat',   label:'Chat'    },
+    { key:'profile', icon:'user',   label:'Perfil'  },
+  ];
+  return (
+    <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:40, background:'var(--surface)', boxShadow:'0 -1px 0 var(--line)', paddingBottom:22, display:'flex', alignItems:'flex-start', justifyContent:'space-around', paddingTop:9 }}>
+      {items.map(it => {
+        if (it.center) return (
+          <button key="sell" onClick={() => go('sell')} style={{ border:'none', cursor:'pointer', background:'none', marginTop:-2, padding:0 }}>
+            <div style={{ width:52, height:52, borderRadius:17, background:'var(--green)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 8px 18px -6px var(--green-shadow)' }}>
+              <Icon name="plus" size={26} color="#fff" strokeWidth={2.4}/>
+            </div>
+          </button>
+        );
+        const active = current === it.key;
+        return (
+          <button key={it.key} onClick={() => go(it.key)} style={{ border:'none', background:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, width:56, padding:0 }}>
+            <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
+            <span style={{ fontSize:10.5, fontWeight:700, color:active?'var(--green-d)':'var(--muted)' }}>{it.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────
+function App() {
+  const [stack, setStack] = React.useState([{ screen:'home' }]);
+  const [favs, setFavs] = React.useState([]);
+  const cur = stack[stack.length - 1];
+  const rootTab = stack[0].screen;
+  const go = (screen, params) => {
+    if (TABS.includes(screen)) setStack([{ screen, params }]);
+    else setStack(s => [...s, { screen, params }]);
+  };
+  const back = () => setStack(s => s.length > 1 ? s.slice(0,-1) : s);
+  const toggleFav = id => setFavs(f => f.includes(id) ? f.filter(x=>x!==id) : [...f,id]);
+  const showNav = TABS.includes(cur.screen);
+
+  let screen;
+  switch (cur.screen) {
+    case 'home':       screen = <HomeScreen go={go} favs={favs} toggleFav={toggleFav} showPromo={true}/>; break;
+    case 'search':     screen = <SearchScreen go={go} favs={favs} toggleFav={toggleFav}/>; break;
+    case 'chat':       screen = <ChatListScreen go={go}/>; break;
+    case 'profile':    screen = <ProfileScreen go={go}/>; break;
+    case 'detail':     screen = <DetailScreen id={cur.params.id} back={back} go={go} favs={favs} toggleFav={toggleFav}/>; break;
+    case 'sell':       screen = <SellScreen go={go} onPublish={d=>go('publishSuccess',d)}/>; break;
+    case 'checkout':   screen = <CheckoutScreen id={cur.params.id} back={back} onPaid={id=>go('buySuccess',{id})}/>; break;
+    case 'chatThread': screen = <ChatThreadScreen seller={cur.params.seller} book={cur.params.book} back={back} go={go}/>; break;
+    case 'buySuccess': {
+      const bk = BOOKS.find(b=>b.id===cur.params.id);
+      screen = <SuccessScreen title="Pagamento confirmado! 🎉" lines={[`Combine a retirada de "${bk.title}" pelo chat com o vendedor.`, 'Confirme o recebimento no app para liberar o pagamento.']} primaryLabel="Ver conversas" onPrimary={()=>go('chat')} secondaryLabel="Voltar à vitrine" onSecondary={()=>go('home')}/>;
+      break;
+    }
+    case 'publishSuccess': {
+      const d = cur.params; const rec = Math.max(0, d.price - d.price*0.05 - (d.delivery==='plataforma'?3:0));
+      screen = <SuccessScreen title="Anúncio publicado!" lines={[`"${d.title}" já está na vitrine.`, `Quando vender, você recebe ${fmt(rec)} no Pix.`]} primaryLabel="Ver na vitrine" onPrimary={()=>go('home')} secondaryLabel="Anunciar outro" onSecondary={()=>go('sell')}/>;
+      break;
+    }
+    default: screen = <HomeScreen go={go} favs={favs} toggleFav={toggleFav} showPromo/>;
+  }
+
+  return (
+    <div style={{ width:'100%', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 0', background:'#e8e8ed' }}>
+      <div style={{ width:390, height:844, borderRadius:48, overflow:'hidden', position:'relative', background:'var(--bg)', boxShadow:'0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)', fontFamily:'-apple-system, system-ui, sans-serif', WebkitFontSmoothing:'antialiased' }}>
+        {/* Dynamic Island */}
+        <div style={{ position:'absolute', top:11, left:'50%', transform:'translateX(-50%)', width:126, height:37, borderRadius:24, background:'#000', zIndex:50 }}/>
+        <div style={{ height:'100%', overflow:'auto', WebkitOverflowScrolling:'touch', paddingBottom:showNav?80:0 }}>
+          {screen}
+        </div>
+        {showNav && <BottomNav current={rootTab} go={go}/>}
+        {/* Home indicator */}
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:60, height:34, display:'flex', justifyContent:'center', alignItems:'flex-end', paddingBottom:8, pointerEvents:'none' }}>
+          <div style={{ width:139, height:5, borderRadius:100, background:'rgba(0,0,0,0.25)' }}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
