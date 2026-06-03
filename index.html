@@ -1239,13 +1239,11 @@ function App(){
       }
     };
 
-    sb.auth.getSession().then(({data:{session}})=>{
-      if(session) handleUser(session.user);
-      else setAppState('login');
-    });
-
     const {data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-      if(event==='SIGNED_IN'&&session){
+      if(event==='INITIAL_SESSION'){
+        if(session) handleUser(session.user);
+        else setAppState('login');
+      } else if(event==='SIGNED_IN'&&session){
         handleUser(session.user);
       } else if(event==='SIGNED_OUT'){
         setAppState('login');
