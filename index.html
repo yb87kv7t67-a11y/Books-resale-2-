@@ -92,7 +92,7 @@ input,textarea,select{font-family:inherit;}
 const { createClient } = window.supabase;
 const SUPA_URL = 'https://yozsslpvdhqurxoawcgj.supabase.co';
 const SUPA_KEY = 'sb_secret_nwg-UGXOFWFZgCxyFOrSQ_15_DViBD';
-const sb = createClient(SUPA_URL, SUPA_KEY);
+const sb = createClient(SUPA_URL, SUPA_KEY, { auth: { flowType: 'implicit' } });
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_RATE = 0.175;
