@@ -246,23 +246,24 @@ function LoadingScreen(){
 
 // ─── LOGIN SCREEN ─────────────────────────────────────────────
 function LoginScreen({onLogin,error}){
-  const btnRef=React.useRef(null);
-  React.useEffect(()=>{
-    if(!btnRef.current)return;
-    const init=()=>{
-      if(!window.google)return;
-      window.google.accounts.id.initialize({
-        client_id:GOOGLE_CLIENT_ID,
-        callback:onLogin,
-        ux_mode:'popup',
-      });
-      window.google.accounts.id.renderButton(btnRef.current,{
-        theme:'outline',size:'large',width:280,text:'signin_with',shape:'rectangular',locale:'pt-BR'
-      });
-    };
-    if(window.google) init();
-    else{const t=setInterval(()=>{if(window.google){init();clearInterval(t);}},200);}
-  },[]);
+  const [loading,setLoading]=React.useState(false);
+  const handleClick=()=>{
+    setLoading(true);
+    if(!window.google){setLoading(false);return;}
+    window.google.accounts.id.initialize({
+      client_id:GOOGLE_CLIENT_ID,
+      callback:async(resp)=>{
+        if(!resp?.credential){setLoading(false);return;}
+        const {error:e}=await sb.auth.signInWithIdToken({provider:'google',token:resp.credential});
+        setLoading(false);
+        if(e) onLogin(null,e.message);
+      },
+      ux_mode:'popup',
+    });
+    window.google.accounts.id.prompt((notification)=>{
+      if(notification.isNotDisplayed()||notification.isSkippedMoment()) setLoading(false);
+    });
+  };
   return(
     <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:28}}>
       <div style={{width:'100%',maxWidth:340,background:'var(--surface)',borderRadius:28,padding:'36px 28px',boxShadow:'0 16px 40px -16px rgba(0,0,0,0.18)',display:'flex',flexDirection:'column',alignItems:'center'}}>
@@ -275,7 +276,9 @@ function LoginScreen({onLogin,error}){
         <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5,textAlign:'center'}}>Livros Online</div>
         <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:32}}>Marketplace de livros escolares usados</div>
         {error&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:16,textAlign:'center'}}>{error}</div>}
-        <div ref={btnRef} style={{display:'flex',justifyContent:'center',width:'100%'}}/>
+        <button onClick={handleClick} disabled={loading} style={{width:'100%',height:54,borderRadius:16,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12,boxShadow:'0 2px 8px -4px rgba(0,0,0,0.1)',opacity:loading?0.7:1}}>
+          {loading?'Aguarde...':<><svg width="22" height="22" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Entrar com Google</>}
+        </button>
       </div>
     </div>
   );
@@ -1250,11 +1253,9 @@ function App(){
     });
   },[chats]);
 
-  const handleLogin=async(resp)=>{
+  const handleLogin=(resp,errMsg)=>{
+    if(errMsg){setLoginError(errMsg);return;}
     setLoginError('');
-    if(!resp||!resp.credential){return;}
-    const {error}=await sb.auth.signInWithIdToken({provider:'google',token:resp.credential});
-    if(error) setLoginError(error.message);
   };
 
   const handleSaveProfile=async(data)=>{
