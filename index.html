@@ -246,30 +246,6 @@ function LoadingScreen(){
 
 // ─── LOGIN SCREEN ─────────────────────────────────────────────
 function LoginScreen({onLogin,error}){
-  const [email,setEmail]=React.useState('');
-  const [password,setPassword]=React.useState('');
-  const [mode,setMode]=React.useState('login'); // login | signup
-  const [loading,setLoading]=React.useState(false);
-  const [err,setErr]=React.useState('');
-  const [success,setSuccess]=React.useState('');
-
-  const INPUT={width:'100%',height:52,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'#f9f9fb',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none'};
-
-  const handle=async()=>{
-    if(!email.trim()||!email.includes('@')){setErr('Email inválido');return;}
-    if(password.length<6){setErr('Senha precisa ter pelo menos 6 caracteres');return;}
-    setErr('');setLoading(true);
-    if(mode==='signup'){
-      const {error:e}=await sb.auth.signUp({email,password});
-      setLoading(false);
-      if(e){setErr(e.message);}else{setSuccess('Conta criada! Agora faça login.');setMode('login');}
-    } else {
-      const {error:e}=await sb.auth.signInWithPassword({email,password});
-      setLoading(false);
-      if(e){setErr('Email ou senha incorretos');}
-    }
-  };
-
   return(
     <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:28}}>
       <div style={{width:'100%',maxWidth:340,background:'var(--surface)',borderRadius:28,padding:'36px 28px',boxShadow:'0 16px 40px -16px rgba(0,0,0,0.18)',display:'flex',flexDirection:'column',alignItems:'center'}}>
@@ -280,30 +256,10 @@ function LoginScreen({onLogin,error}){
           </svg>
         </div>
         <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5,textAlign:'center'}}>Livros Online</div>
-        <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:24}}>Marketplace de livros escolares usados</div>
-        <div style={{display:'flex',width:'100%',background:'#f0f0f5',borderRadius:12,padding:3,marginBottom:20}}>
-          {['login','signup'].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setErr('');setSuccess('');}} style={{flex:1,height:38,borderRadius:10,border:'none',background:mode===m?'#fff':'transparent',cursor:'pointer',fontFamily:'inherit',fontSize:14,fontWeight:700,color:mode===m?'var(--ink)':'var(--muted)',boxShadow:mode===m?'0 1px 4px rgba(0,0,0,0.1)':'none',transition:'all .15s'}}>
-              {m==='login'?'Entrar':'Criar conta'}
-            </button>
-          ))}
-        </div>
-        {err&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:12,textAlign:'center'}}>{err}</div>}
-        {success&&<div style={{width:'100%',background:'#dcfce7',color:'#166534',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:12,textAlign:'center'}}>{success}</div>}
-        <div style={{width:'100%',display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
-          <input value={email} onChange={e=>{setEmail(e.target.value);setErr('');}} placeholder="seu@email.com" type="email" style={INPUT}/>
-          <input value={password} onChange={e=>{setPassword(e.target.value);setErr('');}} onKeyDown={e=>e.key==='Enter'&&handle()} placeholder="Senha (mín. 6 caracteres)" type="password" style={INPUT}/>
-        </div>
-        <button onClick={handle} disabled={loading} style={{width:'100%',height:50,borderRadius:14,border:'none',background:'var(--green)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'#fff',opacity:loading?0.7:1}}>
-          {loading?'...':(mode==='login'?'Entrar':'Criar conta')}
-        </button>
-        <div style={{width:'100%',display:'flex',alignItems:'center',gap:10,margin:'14px 0'}}>
-          <div style={{flex:1,height:1,background:'var(--line)'}}/>
-          <span style={{fontSize:12,color:'var(--muted)',fontWeight:600}}>ou</span>
-          <div style={{flex:1,height:1,background:'var(--line)'}}/>
-        </div>
-        <button onClick={onLogin} style={{width:'100%',height:50,borderRadius:14,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
-          <svg width="20" height="20" viewBox="0 0 24 24">
+        <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:32}}>Marketplace de livros escolares usados</div>
+        {error&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:16,textAlign:'center'}}>{error}</div>}
+        <button onClick={onLogin} style={{width:'100%',height:54,borderRadius:16,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12,boxShadow:'0 2px 8px -4px rgba(0,0,0,0.1)'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
@@ -778,15 +734,20 @@ function SellScreen({go,onPublish,profile,showToast}){
     if(!file||!profile)return;
     setUploading(true);
     try{
-      const ext=file.name.split('.').pop();
+      const ext=file.name.split('.').pop().toLowerCase()||'jpg';
       const path=`${profile.id}/${Date.now()}.${ext}`;
-      const {error}=await sb.storage.from('book-photos').upload(path,file,{upsert:true});
-      if(error)throw error;
+      const {error:upErr}=await sb.storage.from('book-photos').upload(path,file,{upsert:true,contentType:file.type||'image/jpeg'});
+      if(upErr){
+        // Try creating bucket if doesn't exist
+        await sb.storage.createBucket('book-photos',{public:true}).catch(()=>{});
+        const {error:upErr2}=await sb.storage.from('book-photos').upload(path,file,{upsert:true,contentType:file.type||'image/jpeg'});
+        if(upErr2) throw upErr2;
+      }
       const {data:pub}=sb.storage.from('book-photos').getPublicUrl(path);
       setPhotoUrl(pub.publicUrl);
       showToast('Foto enviada!');
     }catch(err){
-      showToast('Erro ao enviar foto: '+err.message);
+      showToast('Erro foto: '+err.message);
     }
     setUploading(false);
   };
