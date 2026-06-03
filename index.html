@@ -93,7 +93,7 @@ const { createClient } = window.supabase;
 const SUPA_URL = 'https://yozsslpvdhqurxoawcgj.supabase.co';
 const SUPA_KEY = 'sb_publishable_iKtH8PlR2RMbVPTCdCBo6g_y614cKMx';
 const GOOGLE_CLIENT_ID = '435734457604-a1q793bgdb8g95l70pfk6tqn6enld7ie.apps.googleusercontent.com';
-const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit'}});
+const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit',detectSessionInUrl:true,persistSession:true,storageKey:'sb-session'}});
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_RATE = 0.175;
@@ -1188,46 +1188,83 @@ function App(){
 
   React.useEffect(()=>{
     let realtimeChan=null;
+    let userHandled=false;
+    let cancelled=false;
+
+    const setupRealtime=(uid)=>{
+      realtimeChan=sb.channel('books-rt')
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},payload=>{
+          setBooks(prev=>{
+            if(prev.find(b=>b.id===payload.new.id)) return prev;
+            return [payload.new,...prev];
+          });
+        })
+        .subscribe();
+    };
 
     const handleUser=async(user)=>{
+      if(cancelled||userHandled) return;
+      userHandled=true;
       setAuthUser(user);
       const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+      if(cancelled) return;
       if(prof&&prof.name){
         setProfile(prof);
         setAppState('app');
         loadBooks();
         loadChats(user.id);
-        // realtime books
-        realtimeChan=sb.channel('books-rt')
-          .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},payload=>{
-            setBooks(prev=>{
-              if(prev.find(b=>b.id===payload.new.id)) return prev;
-              return [payload.new,...prev];
-            });
-          })
-          .subscribe();
+        setupRealtime(user.id);
       } else {
         setAppState('register');
       }
     };
 
+    // Detect if returning from OAuth redirect (hash contains token)
+    const hash=window.location.hash||'';
+    const hasOAuthHash=hash.includes('access_token')||hash.includes('error_description');
+    const waitTime=hasOAuthHash?10000:2000;
+
+    // Fallback: if SIGNED_IN never fires, fall back to login
+    const fallbackTimer=setTimeout(()=>{
+      if(!cancelled&&!userHandled) setAppState(s=>s==='loading'?'login':s);
+    },waitTime);
+
+    // If OAuth hash detected, also poll getSession every 500ms for up to 10s
+    let pollInterval=null;
+    if(hasOAuthHash){
+      pollInterval=setInterval(async()=>{
+        if(cancelled||userHandled){clearInterval(pollInterval);return;}
+        const {data:{session}}=await sb.auth.getSession();
+        if(session&&session.user){
+          clearInterval(pollInterval);
+          handleUser(session.user);
+        }
+      },500);
+    }
+
     const {data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-      if(event==='INITIAL_SESSION'){
-        if(session) handleUser(session.user);
-        else setTimeout(()=>setAppState(s=>s==='loading'?'login':s),2000);
-      } else if(event==='SIGNED_IN'&&session){
+      if(event==='INITIAL_SESSION'&&session){
+        clearTimeout(fallbackTimer);
+        if(pollInterval) clearInterval(pollInterval);
         handleUser(session.user);
-      } else if(event==='SIGNED_OUT'){
-        setAppState('login');
-        setAuthUser(null);
-        setProfile(null);
-        setBooks([]);
-        setChats([]);
-        if(realtimeChan) sb.removeChannel(realtimeChan);
+      } else if(event==='SIGNED_IN'&&session){
+        clearTimeout(fallbackTimer);
+        if(pollInterval) clearInterval(pollInterval);
+        handleUser(session.user);
+      } else if(event==='SIGNED_OUT'&&!hasOAuthHash){
+        if(!cancelled){
+          setAppState('login');
+          setAuthUser(null); setProfile(null); setBooks([]); setChats([]);
+          userHandled=false;
+          if(realtimeChan) sb.removeChannel(realtimeChan);
+        }
       }
     });
 
     return ()=>{
+      cancelled=true;
+      clearTimeout(fallbackTimer);
+      if(pollInterval) clearInterval(pollInterval);
       subscription.unsubscribe();
       if(realtimeChan) sb.removeChannel(realtimeChan);
     };
