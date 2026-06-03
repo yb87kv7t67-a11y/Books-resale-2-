@@ -1214,8 +1214,7 @@ function App(){
     const {data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
       if(event==='INITIAL_SESSION'){
         if(session) handleUser(session.user);
-        else if(!window.location.hash.includes('access_token')&&!window.location.hash.includes('error_description')) setAppState('login');
-        // if hash has tokens, wait for SIGNED_IN event
+        else setTimeout(()=>setAppState(s=>s==='loading'?'login':s),2000);
       } else if(event==='SIGNED_IN'&&session){
         handleUser(session.user);
       } else if(event==='SIGNED_OUT'){
