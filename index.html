@@ -63,6 +63,7 @@ create table orders (
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:#e8e8ed;font-family:-apple-system,system-ui,sans-serif;}
@@ -92,7 +93,8 @@ input,textarea,select{font-family:inherit;}
 const { createClient } = window.supabase;
 const SUPA_URL = 'https://yozsslpvdhqurxoawcgj.supabase.co';
 const SUPA_KEY = 'sb_publishable_iKtH8PlR2RMbVPTCdCBo6g_y614cKMx';
-const sb = createClient(SUPA_URL, SUPA_KEY, { auth: { flowType: 'implicit' } });
+const GOOGLE_CLIENT_ID = '435734457604-a1q793bgdb8g95l70pfk6tqn6enld7ie.apps.googleusercontent.com';
+const sb = createClient(SUPA_URL, SUPA_KEY);
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_RATE = 0.175;
@@ -1278,13 +1280,17 @@ function App(){
     });
   },[chats]);
 
-  const handleLogin=async()=>{
+  const handleLogin=()=>{
     setLoginError('');
-    const {error}=await sb.auth.signInWithOAuth({
-      provider:'google',
-      options:{redirectTo:window.location.origin}
+    if(!window.google){setLoginError('Google não carregou ainda, tente de novo.');return;}
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async(resp)=>{
+        const {error}=await sb.auth.signInWithIdToken({provider:'google',token:resp.credential});
+        if(error) setLoginError(error.message);
+      }
     });
-    if(error) setLoginError(error.message);
+    window.google.accounts.id.prompt();
   };
 
   const handleSaveProfile=async(data)=>{
