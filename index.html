@@ -245,19 +245,28 @@ function LoadingScreen(){
 // ─── LOGIN SCREEN ─────────────────────────────────────────────
 function LoginScreen({onLogin,error}){
   const [email,setEmail]=React.useState('');
-  const [sent,setSent]=React.useState(false);
+  const [code,setCode]=React.useState('');
+  const [step,setStep]=React.useState('email'); // email | code
   const [loading,setLoading]=React.useState(false);
-  const [emailErr,setEmailErr]=React.useState('');
+  const [err,setErr]=React.useState('');
 
-  const sendMagicLink=async()=>{
-    if(!email.trim()||!email.includes('@')){setEmailErr('Digite um email válido');return;}
-    setEmailErr('');setLoading(true);
-    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin}});
+  const INPUT={width:'100%',height:52,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'#f9f9fb',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none'};
+
+  const sendOtp=async()=>{
+    if(!email.trim()||!email.includes('@')){setErr('Digite um email válido');return;}
+    setErr('');setLoading(true);
+    const {error:e}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
     setLoading(false);
-    if(error){setEmailErr(error.message);}else{setSent(true);}
+    if(e){setErr(e.message);}else{setStep('code');}
   };
 
-  const INPUT={width:'100%',height:50,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'#f9f9fb',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none'};
+  const verifyOtp=async()=>{
+    if(code.trim().length<6){setErr('Digite o código de 6 dígitos');return;}
+    setErr('');setLoading(true);
+    const {error:e}=await sb.auth.verifyOtp({email,token:code.trim(),type:'email'});
+    setLoading(false);
+    if(e){setErr('Código inválido ou expirado. Tente novamente.');}
+  };
 
   return(
     <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:28}}>
@@ -271,29 +280,22 @@ function LoginScreen({onLogin,error}){
         <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5,textAlign:'center'}}>Livros Online</div>
         <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:28}}>Marketplace de livros escolares usados</div>
         {error&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:14,textAlign:'center'}}>{error}</div>}
+        {err&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:14,textAlign:'center'}}>{err}</div>}
 
-        {sent?(
-          <div style={{width:'100%',textAlign:'center'}}>
-            <div style={{fontSize:40,marginBottom:12}}>📧</div>
-            <div style={{fontSize:16,fontWeight:700,color:'var(--ink)',marginBottom:8}}>Verifique seu email!</div>
-            <div style={{fontSize:14,color:'var(--muted)',lineHeight:1.5}}>Enviamos um link para <strong>{email}</strong>. Clique nele para entrar.</div>
-            <button onClick={()=>setSent(false)} style={{marginTop:18,background:'none',border:'none',color:'var(--green)',fontSize:14,fontWeight:600,cursor:'pointer'}}>Usar outro email</button>
-          </div>
-        ):(
+        {step==='email'?(
           <>
-            <div style={{width:'100%',marginBottom:10}}>
-              <input value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendMagicLink()} placeholder="seu@email.com" type="email" style={INPUT}/>
-              {emailErr&&<div style={{color:'#b91c1c',fontSize:12,fontWeight:600,marginTop:4,paddingLeft:4}}>{emailErr}</div>}
+            <div style={{width:'100%',marginBottom:12}}>
+              <input value={email} onChange={e=>{setEmail(e.target.value);setErr('');}} onKeyDown={e=>e.key==='Enter'&&sendOtp()} placeholder="seu@email.com" type="email" style={INPUT} autoFocus/>
             </div>
-            <button onClick={sendMagicLink} disabled={loading} style={{width:'100%',height:50,borderRadius:14,border:'none',background:'var(--green)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'#fff',marginBottom:14,opacity:loading?0.7:1}}>
-              {loading?'Enviando...':'Entrar com Email'}
+            <button onClick={sendOtp} disabled={loading} style={{width:'100%',height:50,borderRadius:14,border:'none',background:'var(--green)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'#fff',marginBottom:16,opacity:loading?0.7:1}}>
+              {loading?'Enviando...':'Continuar com Email'}
             </button>
             <div style={{width:'100%',display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
               <div style={{flex:1,height:1,background:'var(--line)'}}/>
               <span style={{fontSize:12,color:'var(--muted)',fontWeight:600}}>ou</span>
               <div style={{flex:1,height:1,background:'var(--line)'}}/>
             </div>
-            <button onClick={onLogin} style={{width:'100%',height:50,borderRadius:14,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12,boxShadow:'0 2px 8px -4px rgba(0,0,0,0.1)'}}>
+            <button onClick={onLogin} style={{width:'100%',height:50,borderRadius:14,border:'1.5px solid var(--line)',background:'var(--surface)',cursor:'pointer',fontFamily:'inherit',fontSize:15,fontWeight:700,color:'var(--ink)',display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -302,6 +304,20 @@ function LoginScreen({onLogin,error}){
               </svg>
               Entrar com Google
             </button>
+          </>
+        ):(
+          <>
+            <div style={{width:'100%',textAlign:'center',marginBottom:20}}>
+              <div style={{fontSize:15,fontWeight:600,color:'var(--ink)'}}>Código enviado para</div>
+              <div style={{fontSize:14,color:'var(--green)',fontWeight:700,marginTop:2}}>{email}</div>
+            </div>
+            <div style={{width:'100%',marginBottom:12}}>
+              <input value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,'').slice(0,6));setErr('');}} onKeyDown={e=>e.key==='Enter'&&verifyOtp()} placeholder="000000" type="tel" maxLength={6} style={{...INPUT,fontSize:28,letterSpacing:8,textAlign:'center'}} autoFocus/>
+            </div>
+            <button onClick={verifyOtp} disabled={loading||code.length<6} style={{width:'100%',height:50,borderRadius:14,border:'none',background:'var(--green)',cursor:'pointer',fontFamily:'inherit',fontSize:15.5,fontWeight:700,color:'#fff',marginBottom:12,opacity:(loading||code.length<6)?0.6:1}}>
+              {loading?'Verificando...':'Entrar'}
+            </button>
+            <button onClick={()=>{setStep('email');setCode('');setErr('');}} style={{background:'none',border:'none',color:'var(--muted)',fontSize:13,fontWeight:600,cursor:'pointer'}}>Usar outro email</button>
           </>
         )}
       </div>
