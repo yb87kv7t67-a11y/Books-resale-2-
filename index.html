@@ -93,7 +93,7 @@ const { createClient } = window.supabase;
 const SUPA_URL = 'https://yozsslpvdhqurxoawcgj.supabase.co';
 const SUPA_KEY = 'sb_publishable_iKtH8PlR2RMbVPTCdCBo6g_y614cKMx';
 const GOOGLE_CLIENT_ID = '435734457604-a1q793bgdb8g95l70pfk6tqn6enld7ie.apps.googleusercontent.com';
-const sb = createClient(SUPA_URL, SUPA_KEY);
+const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit'}});
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_RATE = 0.175;
@@ -1252,11 +1252,7 @@ function App(){
     setProfileSaving(true);
     const {data:prof,error}=await sb.from('profiles').upsert({id:authUser.id,...data}).select().single();
     if(error){showToast('Erro ao salvar perfil: '+error.message);setProfileSaving(false);return;}
-    setProfile(prof);
-    setAppState('app');
-    loadBooks();
-    loadChats(authUser.id);
-    setProfileSaving(false);
+    window.location.replace(window.location.origin);
   };
 
   const handleLogout=async()=>{ await sb.auth.signOut(); };
