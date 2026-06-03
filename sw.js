@@ -1,4 +1,4 @@
-const CACHE_NAME = 'livros-online-v9';
+const CACHE_NAME = 'livros-online-v10';
 
 const SHELL_URLS = [
   '/',
