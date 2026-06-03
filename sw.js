@@ -1,4 +1,4 @@
-const CACHE_NAME = 'livros-online-v10';
+const CACHE_NAME = 'livros-online-v11';
 
 const SHELL_URLS = [
   '/',
@@ -43,7 +43,8 @@ self.addEventListener('fetch', event => {
 
   const isCDN = CDN_URLS.some(u => event.request.url.startsWith(u)) ||
                 url.hostname === 'unpkg.com' ||
-                url.hostname === 'cdn.jsdelivr.net';
+                url.hostname === 'cdn.jsdelivr.net' ||
+                url.hostname === 'accounts.google.com';
 
   const isShell = SHELL_URLS.includes(url.pathname) || url.pathname === '/';
 
