@@ -104,11 +104,12 @@ const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
 const ICONBTN = {width:38,height:38,borderRadius:'50%',border:'none',background:'rgba(0,0,0,0.06)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0};
 
 const SCHOOLS = ['Escola Alemã Corcovado','British School','Santo Inácio','Eleva','Santo Agostinho','Outra'];
-const YEARS = ['1º ano','2º ano','3º ano','ENEM / Vestibular'];
+const YEARS = ['Todos os níveis','Ensino Fundamental I','Ensino Fundamental II','Ensino Médio','ENEM / Vestibular'];
 const SUBJECTS_BY_YEAR = {
-  '1º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Artes'],
-  '2º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Sociologia'],
-  '3º ano':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Redação'],
+  'Todos os níveis':['Todas as matérias'],
+  'Ensino Fundamental I':['Matemática','Português','Ciências','História','Geografia','Artes','Educação Física'],
+  'Ensino Fundamental II':['Matemática','Português','Ciências','Física','Química','Biologia','História','Geografia','Inglês','Artes'],
+  'Ensino Médio':['Matemática','Português','Biologia','Física','Química','História','Geografia','Inglês','Filosofia','Sociologia','Redação'],
   'ENEM / Vestibular':['Matemática','Português','Ciências da Natureza','Ciências Humanas','Linguagens','Redação'],
 };
 const CONDITIONS = {novo:{label:'Como novo',tone:'green'},bom:{label:'Bom estado',tone:'blue'},usado:{label:'Usado',tone:'neutral'}};
@@ -259,6 +260,7 @@ function LoginScreen({onLogin,error}){
       window.google.accounts.id.initialize({
         client_id:GOOGLE_CLIENT_ID,
         ux_mode:'popup',
+        use_fedcm_for_prompt:false,
         callback:async(resp)=>{
           if(!resp?.credential){setErr('Login cancelado.');return;}
           const {error:e}=await sb.auth.signInWithIdToken({provider:'google',token:resp.credential});
@@ -349,7 +351,6 @@ function RegisterScreen({user,onSave,loading}){
 
 // ─── HOME CARD ───────────────────────────────────────────────
 function HomeCard({book,onOpen,faved,toggleFav}){
-  const {buyerPays} = calcFees(book.price);
   return(
     <div onClick={()=>onOpen(book.id)} style={{borderRadius:'var(--card-radius)',background:'var(--surface)',boxShadow:'0 2px 12px rgba(0,0,0,0.07)',cursor:'pointer',overflow:'hidden',animation:'fadeIn .25s ease'}}>
       <div style={{position:'relative',padding:10,paddingBottom:0}}>
@@ -362,8 +363,7 @@ function HomeCard({book,onOpen,faved,toggleFav}){
       <div style={{padding:'10px 12px 14px'}}>
         <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',lineHeight:1.25,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',marginBottom:4}}>{book.title}</div>
         <div style={{fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:6}}>{book.year} · {book.subject}</div>
-        <div style={{fontSize:16,fontWeight:800,color:'var(--green-d)'}}>{fmt(buyerPays)}</div>
-        <div style={{fontSize:10.5,fontWeight:600,color:'var(--muted)',marginBottom:4}}>anunciado por {fmt(book.price)}</div>
+        <div style={{fontSize:16,fontWeight:800,color:'var(--green-d)'}}>{fmt(book.price)}</div>
         <ConditionBadge condition={book.condition} small/>
       </div>
     </div>
@@ -1378,4 +1378,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
