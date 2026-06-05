@@ -109,7 +109,7 @@ const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit',detectSes
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_EACH = 0.085; // 8.5% cada lado
-const ADMIN_EMAIL = 'andrefc2009@outlook.com';
+const ADMIN_EMAILSS = ['andrefc2009@outlook.com','joaquimbuchheim@icloud.com'];
 const TABS = ['home','search','chat','profile'];
 const PIX_KEY = '21998729191';
 const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
@@ -1138,7 +1138,7 @@ function ProfileScreen({go,books,setBooks,profile,authUser,onLogout,showToast}){
           );
         })}
 
-        {authUser?.email===ADMIN_EMAIL&&(
+        {ADMIN_EMAILS.includes(authUser?.email)&&(
           <div style={{marginTop:16}}>
             <Button kind="secondary" full onClick={()=>go('admin')}>
               <Icon name="shield" size={18} color="var(--ink)"/>Painel Admin
@@ -1163,7 +1163,7 @@ function AdminScreen({back,authUser,showToast}){
   const [loading,setLoading]=React.useState(true);
 
   React.useEffect(()=>{
-    if(authUser?.email!==ADMIN_EMAIL){back();return;}
+    if(!ADMIN_EMAILS.includes(authUser?.email)){back();return;}
     Promise.all([
       sb.from('books').select('*, profiles(name)').order('created_at',{ascending:false}),
       sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
