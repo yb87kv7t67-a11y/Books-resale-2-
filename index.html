@@ -42,10 +42,21 @@ create table orders (
   seller_confirmed_delivery boolean default false,
   created_at timestamptz default now()
 );
+create table notifications (
+  id uuid default gen_random_uuid() primary key,
+  type text,
+  order_id uuid,
+  book_title text,
+  book_price float,
+  buyer_name text,
+  seller_name text,
+  user_role text,
+  action text,
+  read boolean default false,
+  created_at timestamptz default now()
+);
 -- Storage: create bucket 'book-photos' (public)
--- RLS: For development, disable RLS on all tables or add permissive policies
--- Allow all: alter table profiles enable row level security; create policy "all" on profiles for all using (true) with check (true);
--- (repeat for books, chats, messages, orders)
+-- RLS: alter table profiles disable row level security; (repeat for all tables)
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -97,7 +108,8 @@ const GOOGLE_CLIENT_ID = '435734457604-a1q793bgdb8g95l70pfk6tqn6enld7ie.apps.goo
 const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit',detectSessionInUrl:false,persistSession:true}});
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const FEE_RATE = 0.175;
+const FEE_EACH = 0.085; // 8.5% cada lado
+const ADMIN_EMAIL = 'andrefc2009@outlook.com';
 const TABS = ['home','search','chat','profile'];
 const PIX_KEY = '21998729191';
 const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
@@ -116,11 +128,11 @@ const CONDITIONS = {novo:{label:'Como novo',tone:'green'},bom:{label:'Bom estado
 const SUBJECT_HUES = {'Matemática':152,'Português':248,'Literatura':25,'Física':200,'Química':300,'Biologia':135,'História':50,'Geografia':175,'Inglês':270,'Filosofia':15,'Sociologia':40,'Artes':320,'Redação':248,'Ciências da Natureza':135,'Ciências Humanas':50,'Linguagens':270};
 
 function calcFees(price){
-  const totalFee = price * FEE_RATE;
-  const halfFee = totalFee / 2;
-  const buyerPays = price + halfFee;
-  const sellerReceives = price - halfFee;
-  return {totalFee, halfFee, buyerPays, sellerReceives};
+  const buyerFee = price * FEE_EACH;
+  const sellerFee = price * FEE_EACH;
+  const buyerPays = price + buyerFee;
+  const sellerReceives = price - sellerFee;
+  return {buyerFee, sellerFee, buyerPays, sellerReceives};
 }
 
 // ─── ICON ────────────────────────────────────────────────────
@@ -302,7 +314,7 @@ function RegisterScreen({user,onSave,loading}){
   const meta = user?.user_metadata || {};
   const [name,setName]=React.useState(meta.full_name||'');
   const [school,setSchool]=React.useState(SCHOOLS[0]);
-  const [address,setAddress]=React.useState('');
+  const [bairro,setBairro]=React.useState('');
   const [whatsapp,setWhatsapp]=React.useState('');
   const [err,setErr]=React.useState('');
 
@@ -310,11 +322,12 @@ function RegisterScreen({user,onSave,loading}){
 
   const save=()=>{
     if(!name.trim()){setErr('Informe seu nome completo');return;}
+    if(!bairro.trim()){setErr('Informe seu bairro');return;}
     if(!whatsapp.trim()){setErr('Informe seu WhatsApp');return;}
     setErr('');
     const parts=name.trim().split(' ');
     const initials=(parts[0][0]+(parts.length>1?parts[parts.length-1][0]:parts[0][1]||'')).toUpperCase();
-    onSave({name:name.trim(),school,address,whatsapp,initials,color:SUBJECT_HUES[school]||152});
+    onSave({name:name.trim(),school,address:bairro.trim(),whatsapp,initials,color:SUBJECT_HUES[school]||152});
   };
 
   return(
@@ -336,8 +349,8 @@ function RegisterScreen({user,onSave,loading}){
           </select>
         </div>
         <div>
-          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Endereço (opcional)</label>
-          <input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Bairro, cidade" style={INPUT}/>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Bairro *</label>
+          <input value={bairro} onChange={e=>setBairro(e.target.value)} placeholder="Ex: Botafogo, Leblon…" style={INPUT}/>
         </div>
         <div>
           <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>WhatsApp</label>
@@ -345,7 +358,7 @@ function RegisterScreen({user,onSave,loading}){
         </div>
       </div>
       <div style={{padding:'12px 18px 28px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
-        <Button kind="primary" full size="lg" disabled={loading||!name.trim()||!whatsapp.trim()} onClick={save}>
+        <Button kind="primary" full size="lg" disabled={loading||!name.trim()||!bairro.trim()||!whatsapp.trim()} onClick={save}>
           {loading?'Salvando…':'Criar perfil'}
         </Button>
       </div>
@@ -445,7 +458,7 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
   const sellerId = book.seller_id || book.sellerId;
   const seller = sellers[sellerId] || {name:'Vendedor',initials:'?',color:200,rating:5,sales:0};
   const faved=favs.includes(book.id);
-  const {buyerPays,halfFee}=calcFees(book.price);
+  const {buyerPays,buyerFee}=calcFees(book.price);
   const isMe = profile && sellerId === profile.id;
   return(
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
@@ -469,7 +482,7 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
           <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo de valores</div>
           {[
             ['Preço anunciado',fmt(book.price),false],
-            ['Taxa plataforma (÷2 comprador)','+'+fmt(halfFee),true],
+            ['Taxa da plataforma (8,5%)','+'+fmt(buyerFee),true],
           ].map(([k,v,m])=>(
             <div key={k} style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
               <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
@@ -650,24 +663,40 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
     await sb.from('messages').insert({chat_id:chat.id,sender_id:profile.id,text:txt});
   };
 
-  const confirmDelivery=async()=>{
+  const handleDelivery=async(confirmed)=>{
     if(!order||!profile||confirmingDelivery)return;
     setConfirmingDelivery(true);
     const isBuyer=profile.id===order.buyer_id;
-    const update=isBuyer?{buyer_confirmed_delivery:true}:{seller_confirmed_delivery:true};
-    const newBuyer=isBuyer?true:order.buyer_confirmed_delivery;
-    const newSeller=isBuyer?order.seller_confirmed_delivery:true;
-    const bothDone=newBuyer&&newSeller;
-    if(bothDone) update.status='completed';
+    const action=confirmed?(isBuyer?'buyer_confirmed':'seller_confirmed'):(isBuyer?'buyer_refused':'seller_refused');
+    const update=isBuyer
+      ?{buyer_confirmed_delivery:confirmed}
+      :{seller_confirmed_delivery:confirmed};
+    if(!confirmed) update.status='dispute';
+    const newBuyer=isBuyer?confirmed:order.buyer_confirmed_delivery;
+    const newSeller=isBuyer?order.seller_confirmed_delivery:confirmed;
+    if(confirmed&&newBuyer&&newSeller) update.status='completed';
     const {data}=await sb.from('orders').update(update).eq('id',order.id).select().single();
-    if(data){
-      setOrder(data);
-      if(bothDone){
-        await sb.from('books').update({status:'sold'}).eq('id',bookId);
-        showToast('Entrega confirmada! Negócio concluído');
-      } else {
-        showToast('Confirmacao registrada, aguardando a outra parte');
-      }
+    if(data) setOrder(data);
+    // Notify admin
+    const buyerProf=sellers[order.buyer_id]||{name:'?'};
+    const sellerProf=sellers[order.seller_id]||{name:'?'};
+    await sb.from('notifications').insert({
+      type:'delivery_update',
+      order_id:order.id,
+      book_title:book.title,
+      book_price:book.price,
+      buyer_name:buyerProf.name||profile.name,
+      seller_name:sellerProf.name||profile.name,
+      user_role:isBuyer?'comprador':'vendedor',
+      action:confirmed?'confirmou entrega':'RECUSOU entrega',
+    }).catch(()=>{});
+    if(confirmed&&newBuyer&&newSeller){
+      await sb.from('books').update({status:'sold'}).eq('id',bookId);
+      showToast('Entrega confirmada! Negócio concluído');
+    } else if(!confirmed){
+      showToast('Recusa registrada, entraremos em contato');
+    } else {
+      showToast('Confirmação registrada, aguardando a outra parte');
     }
     setConfirmingDelivery(false);
   };
@@ -698,15 +727,23 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
           <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
             {order.status==='completed'?'Negocio concluido!':'Pedido em andamento'}
           </div>
-          {order.status!=='completed'&&(
+          {order.status==='dispute'&&(
+            <div style={{fontSize:13,fontWeight:700,color:'#b91c1c',marginBottom:4}}>Problema reportado — entraremos em contato.</div>
+          )}
+          {order.status!=='completed'&&order.status!=='dispute'&&(
             <>
               <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
                 Comprador: {order.buyer_confirmed_delivery?'confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'confirmou':'aguardando'}
               </div>
               {!myConfirmed&&(
-                <Button kind="primary" full size="sm" disabled={confirmingDelivery} onClick={confirmDelivery}>
-                  Confirmar que recebi o livro
-                </Button>
+                <div style={{display:'flex',gap:8}}>
+                  <Button kind="danger" size="sm" disabled={confirmingDelivery} onClick={()=>handleDelivery(false)} style={{flex:1}}>
+                    {isBuyer?'Não recebi':'Não entreguei'}
+                  </Button>
+                  <Button kind="primary" size="sm" disabled={confirmingDelivery} onClick={()=>handleDelivery(true)} style={{flex:2}}>
+                    {isBuyer?'Recebi o livro':'Entreguei o livro'}
+                  </Button>
+                </div>
               )}
               {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
             </>
@@ -747,7 +784,7 @@ function SellScreen({go,onPublish,profile,showToast}){
   const fileRef=React.useRef(null);
 
   const price=Math.max(0,parseFloat(priceStr.replace(',','.'))||0);
-  const {halfFee,sellerReceives,buyerPays}=calcFees(price);
+  const {sellerFee,sellerReceives}=calcFees(price);
   const subjects=SUBJECTS_BY_YEAR[year]||[];
 
   const INPUT={width:'100%',height:50,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'var(--surface)',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none',boxSizing:'border-box'};
@@ -891,7 +928,7 @@ function SellScreen({go,onPublish,profile,showToast}){
             <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo</div>
             {[
               ['Seu preço',fmt(price),false],
-              ['Taxa plataforma (÷2 vendedor)','– '+fmt(halfFee),true],
+              ['Taxa da plataforma (8,5%)','– '+fmt(sellerFee),true],
             ].map(([k,v,m])=>(
               <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
                 <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
@@ -903,7 +940,6 @@ function SellScreen({go,onPublish,profile,showToast}){
               <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Você recebe no Pix</span>
               <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(sellerReceives)}</span>
             </div>
-            <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginTop:6}}>Comprador paga {fmt(buyerPays)} (taxa ÷2)</div>
           </div>
         )}
       </div>
@@ -932,7 +968,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [copied,setCopied]=React.useState(false);
   const [confirmed,setConfirmed]=React.useState(false);
   const [saving,setSaving]=React.useState(false);
-  const {buyerPays,halfFee}=calcFees(book.price);
+  const {buyerPays,buyerFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
 
   const copyPix=()=>{
@@ -988,7 +1024,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         </div>
 
         <div style={{borderRadius:14,background:'oklch(0.96 0.03 50)',padding:12,fontSize:12.5,fontWeight:500,color:'oklch(0.4 0.1 50)',lineHeight:1.5}}>
-          Taxa de {fmt(halfFee)} inclusa (split 50/50 com o vendedor)
+          Inclui taxa de serviço de {fmt(buyerFee)} (8,5%)
         </div>
 
         <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center'}}>
@@ -1022,7 +1058,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
 }
 
 // ─── PROFILE ─────────────────────────────────────────────────
-function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
+function ProfileScreen({go,books,setBooks,profile,authUser,onLogout,showToast}){
   const myBooks=books.filter(b=>(b.seller_id||b.sellerId)===profile?.id);
 
   const deleteBook=async(bookId)=>{
@@ -1102,11 +1138,96 @@ function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
           );
         })}
 
-        <div style={{marginTop:24}}>
+        {authUser?.email===ADMIN_EMAIL&&(
+          <div style={{marginTop:16}}>
+            <Button kind="secondary" full onClick={()=>go('admin')}>
+              <Icon name="shield" size={18} color="var(--ink)"/>Painel Admin
+            </Button>
+          </div>
+        )}
+        <div style={{marginTop:12}}>
           <Button kind="danger" full onClick={onLogout}>
             <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADMIN SCREEN ────────────────────────────────────────────
+function AdminScreen({back,authUser,showToast}){
+  const [books,setBooks]=React.useState([]);
+  const [notifs,setNotifs]=React.useState([]);
+  const [tab,setTab]=React.useState('notifs');
+  const [loading,setLoading]=React.useState(true);
+
+  React.useEffect(()=>{
+    if(authUser?.email!==ADMIN_EMAIL){back();return;}
+    Promise.all([
+      sb.from('books').select('*, profiles(name)').order('created_at',{ascending:false}),
+      sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
+    ]).then(([bRes,nRes])=>{
+      if(bRes.data) setBooks(bRes.data);
+      if(nRes.data) setNotifs(nRes.data);
+      setLoading(false);
+    });
+  },[]);
+
+  const deleteBook=async(id)=>{
+    await sb.from('books').update({status:'removed'}).eq('id',id);
+    setBooks(prev=>prev.filter(b=>b.id!==id));
+    showToast('Anúncio removido');
+  };
+
+  const markRead=async(id)=>{
+    await sb.from('notifications').update({read:true}).eq('id',id);
+    setNotifs(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
+  };
+
+  return(
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+      <div style={{padding:'54px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:12}}>
+        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
+        <span style={{fontSize:18,fontWeight:800,color:'var(--ink)',flex:1}}>Painel Admin</span>
+      </div>
+      <div style={{display:'flex',gap:8,padding:'12px 18px 0',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        {[['notifs','Notificações'],['books','Anúncios']].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{flex:1,height:38,borderRadius:10,border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:14,fontWeight:700,background:tab===k?'var(--ink)':'transparent',color:tab===k?'#fff':'var(--muted)'}}>
+            {l}{k==='notifs'&&notifs.filter(n=>!n.read).length>0?` (${notifs.filter(n=>!n.read).length})`:''}
+          </button>
+        ))}
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:18,display:'flex',flexDirection:'column',gap:12}}>
+        {loading&&<div style={{textAlign:'center',color:'var(--muted)',paddingTop:40}}>Carregando…</div>}
+        {tab==='notifs'&&notifs.map(n=>(
+          <div key={n.id} style={{borderRadius:16,background:n.read?'var(--surface)':'oklch(0.97 0.04 248)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13.5,fontWeight:800,color:n.action?.includes('RECUSOU')?'#b91c1c':'var(--green-d)',marginBottom:4}}>
+                  {n.user_role==='comprador'?'Comprador':'Vendedor'} {n.action}
+                </div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--ink)',marginBottom:2}}>{n.book_title} · {fmt(n.book_price||0)}</div>
+                <div style={{fontSize:12,fontWeight:500,color:'var(--muted)'}}>Comprador: {n.buyer_name} · Vendedor: {n.seller_name}</div>
+                <div style={{fontSize:11,fontWeight:500,color:'var(--muted)',marginTop:4}}>{new Date(n.created_at).toLocaleString('pt-BR')}</div>
+              </div>
+              {!n.read&&<button onClick={()=>markRead(n.id)} style={{flexShrink:0,height:28,padding:'0 10px',borderRadius:8,border:'none',cursor:'pointer',background:'var(--ink)',color:'#fff',fontSize:11,fontWeight:700,fontFamily:'inherit'}}>OK</button>}
+            </div>
+          </div>
+        ))}
+        {tab==='notifs'&&!loading&&notifs.length===0&&<div style={{textAlign:'center',color:'var(--muted)',paddingTop:40}}>Nenhuma notificação ainda</div>}
+        {tab==='books'&&books.map(b=>(
+          <div key={b.id} style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:14,display:'flex',gap:12,alignItems:'center'}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:800,color:'var(--ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</div>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--muted)'}}>{b.profiles?.name||'?'} · {fmt(b.price)}</div>
+              <div style={{fontSize:11,fontWeight:500,color:'var(--muted)',marginTop:2}}>{b.status} · {new Date(b.created_at).toLocaleDateString('pt-BR')}</div>
+            </div>
+            <button onClick={()=>deleteBook(b.id)} style={{flexShrink:0,width:36,height:36,borderRadius:10,border:'none',cursor:'pointer',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <Icon name="trash" size={17} color="#b91c1c"/>
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1331,7 +1452,7 @@ function App(){
       screen=<ChatListScreen go={go} chats={chats} profile={profile} sellers={sellers} books={books}/>;
       break;
     case 'profile':
-      screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={profile} onLogout={handleLogout} showToast={showToast}/>;
+      screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={profile} authUser={authUser} onLogout={handleLogout} showToast={showToast}/>;
       break;
     case 'detail':
       screen=<DetailScreen id={cur.params.id} back={back} go={go} favs={favs} toggleFav={toggleFav} books={books} profile={profile} sellers={sellers}/>;
@@ -1344,6 +1465,9 @@ function App(){
       break;
     case 'chatThread':
       screen=<ChatThreadScreen chatId={cur.params?.chatId} sellerId={cur.params?.sellerId} bookId={cur.params?.bookId} back={back} go={go} profile={profile} sellers={sellers} books={books} showToast={showToast}/>;
+      break;
+    case 'admin':
+      screen=<AdminScreen back={back} authUser={authUser} showToast={showToast}/>;
       break;
     case 'publishSuccess':{
       const d=cur.params||{};
