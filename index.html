@@ -42,21 +42,10 @@ create table orders (
   seller_confirmed_delivery boolean default false,
   created_at timestamptz default now()
 );
-create table notifications (
-  id uuid default gen_random_uuid() primary key,
-  type text,
-  order_id uuid,
-  book_title text,
-  book_price float,
-  buyer_name text,
-  seller_name text,
-  user_role text,
-  action text,
-  read boolean default false,
-  created_at timestamptz default now()
-);
 -- Storage: create bucket 'book-photos' (public)
--- RLS: alter table profiles disable row level security; (repeat for all tables)
+-- RLS: For development, disable RLS on all tables or add permissive policies
+-- Allow all: alter table profiles enable row level security; create policy "all" on profiles for all using (true) with check (true);
+-- (repeat for books, chats, messages, orders)
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -77,19 +66,23 @@ create table notifications (
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;background:#e8e8ed;font-family:-apple-system,system-ui,sans-serif;}
+html,body{height:100%;background:#1A1A1A;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 #root{height:100%;}
 :root{
-  --green:#1f9d57;--green-d:color-mix(in oklab,#1f9d57,black 22%);
-  --green-shadow:color-mix(in oklab,#1f9d57,transparent 45%);
+  --green:#08A871;--green-d:#067A52;
+  --green-shadow:rgba(8,168,113,0.38);
+  --green-light:rgba(8,168,113,0.1);
   --blue:oklch(0.52 0.14 248);--blue-d:oklch(0.42 0.14 248);
-  --ink:#111827;--muted:#6b7280;--bg:#f5f5f7;--surface:#ffffff;
-  --line:rgba(0,0,0,0.09);--card-radius:16px;
+  --ink:#0C0C0C;--ink2:#3A3A3A;--muted:#909090;
+  --bg:#F5F4F0;--surface:#FFFFFF;--surface2:#FAFAF7;
+  --line:rgba(0,0,0,0.07);--card-radius:20px;
 }
 @keyframes pop{from{transform:scale(0.6);opacity:0;}to{transform:scale(1);opacity:1;}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
 input,textarea,select{font-family:inherit;}
+::-webkit-scrollbar{display:none;}
 @media(max-width:500px){
   .phone-shell{width:100%!important;height:100%!important;border-radius:0!important;box-shadow:none!important;}
   .phone-notch{display:none!important;}
@@ -108,8 +101,7 @@ const GOOGLE_CLIENT_ID = '435734457604-a1q793bgdb8g95l70pfk6tqn6enld7ie.apps.goo
 const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit',detectSessionInUrl:false,persistSession:true}});
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const FEE_EACH = 0.085; // 8.5% cada lado
-const ADMIN_EMAILSS = ['andrefc2009@outlook.com','joaquimbuchheim@icloud.com'];
+const FEE_RATE = 0.175;
 const TABS = ['home','search','chat','profile'];
 const PIX_KEY = '21998729191';
 const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
@@ -128,11 +120,11 @@ const CONDITIONS = {novo:{label:'Como novo',tone:'green'},bom:{label:'Bom estado
 const SUBJECT_HUES = {'Matemática':152,'Português':248,'Literatura':25,'Física':200,'Química':300,'Biologia':135,'História':50,'Geografia':175,'Inglês':270,'Filosofia':15,'Sociologia':40,'Artes':320,'Redação':248,'Ciências da Natureza':135,'Ciências Humanas':50,'Linguagens':270};
 
 function calcFees(price){
-  const buyerFee = price * FEE_EACH;
-  const sellerFee = price * FEE_EACH;
-  const buyerPays = price + buyerFee;
-  const sellerReceives = price - sellerFee;
-  return {buyerFee, sellerFee, buyerPays, sellerReceives};
+  const totalFee = price * FEE_RATE;
+  const halfFee = totalFee / 2;
+  const buyerPays = price + halfFee;
+  const sellerReceives = price - halfFee;
+  return {totalFee, halfFee, buyerPays, sellerReceives};
 }
 
 // ─── ICON ────────────────────────────────────────────────────
@@ -215,18 +207,18 @@ function Rating({value,size=13}){
 }
 
 function Button({children,kind='primary',full,onClick,size='md',disabled,style={}}){
-  const heights={md:50,lg:56,sm:40};
+  const heights={md:50,lg:56,sm:38};
   const kinds={
-    primary:{background:'var(--green)',color:'#fff',boxShadow:'0 6px 16px -6px var(--green-shadow)'},
-    secondary:{background:'var(--surface)',color:'var(--ink)',boxShadow:'inset 0 0 0 1.5px var(--line)'},
+    primary:{background:'linear-gradient(135deg,#08A871,#0D7055)',color:'#fff',boxShadow:'0 6px 20px -6px rgba(8,168,113,0.5)'},
+    secondary:{background:'var(--surface)',color:'var(--ink)',boxShadow:'0 1px 3px rgba(0,0,0,0.08),inset 0 0 0 1.5px var(--line)'},
     ghost:{background:'transparent',color:'var(--green-d)'},
-    danger:{background:'#fee2e2',color:'#b91c1c'},
+    danger:{background:'#FEF2F2',color:'#DC2626',boxShadow:'inset 0 0 0 1.5px rgba(220,38,38,0.15)'},
   };
-  return <button onClick={onClick} disabled={disabled} style={{...kinds[kind],height:heights[size],padding:'0 18px',borderRadius:14,border:'none',cursor:disabled?'not-allowed':'pointer',fontWeight:700,fontSize:size==='lg'?17:15,width:full?'100%':undefined,fontFamily:'inherit',opacity:disabled?0.5:1,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,...style}}>{children}</button>;
+  return <button onClick={onClick} disabled={disabled} style={{...kinds[kind],height:heights[size],padding:'0 20px',borderRadius:15,border:'none',cursor:disabled?'not-allowed':'pointer',fontWeight:700,fontSize:size==='lg'?17:size==='sm'?13.5:15,width:full?'100%':undefined,fontFamily:'inherit',opacity:disabled?0.45:1,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,letterSpacing:size==='lg'?-0.2:0,...style}}>{children}</button>;
 }
 
 function FilterPill({label,active,onClick}){
-  return <button onClick={onClick} style={{flexShrink:0,height:36,padding:'0 16px',borderRadius:999,cursor:'pointer',fontFamily:'inherit',fontSize:13.5,fontWeight:700,whiteSpace:'nowrap',border:'none',background:active?'var(--ink)':'var(--surface)',color:active?'#fff':'var(--muted)',boxShadow:active?'none':'inset 0 0 0 1.5px var(--line)'}}>{label}</button>;
+  return <button onClick={onClick} style={{flexShrink:0,height:34,padding:'0 14px',borderRadius:999,cursor:'pointer',fontFamily:'inherit',fontSize:13,fontWeight:700,whiteSpace:'nowrap',border:'none',background:active?'var(--ink)':'var(--surface)',color:active?'#fff':'var(--muted)',boxShadow:active?'0 2px 8px rgba(0,0,0,0.18)':'0 1px 3px rgba(0,0,0,0.07)',transition:'all .15s'}}>{label}</button>;
 }
 
 function ConditionBadge({condition,small}){
@@ -245,14 +237,16 @@ function DeliveryTag({type,small}){
 // ─── LOADING SCREEN ──────────────────────────────────────────
 function LoadingScreen(){
   return(
-    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',gap:20}}>
-      <div style={{width:64,height:64,borderRadius:18,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 12px 28px -10px var(--green-shadow)'}}>
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-        </svg>
+    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'linear-gradient(160deg,#0D6B47 0%,#08A871 50%,#06C882 100%)'}}>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:28}}>
+        <div style={{width:76,height:76,borderRadius:24,background:'rgba(255,255,255,0.18)',border:'1px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)'}}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+        </div>
+        <div style={{width:32,height:32,border:'2.5px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin .7s linear infinite'}}/>
       </div>
-      <div style={{width:36,height:36,border:'3.5px solid var(--line)',borderTopColor:'var(--green)',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>
     </div>
   );
 }
@@ -291,19 +285,24 @@ function LoginScreen({error}){
   },[]);
 
   return(
-    <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:28}}>
-      <div style={{width:'100%',maxWidth:340,background:'var(--surface)',borderRadius:28,padding:'36px 28px',boxShadow:'0 16px 40px -16px rgba(0,0,0,0.18)',display:'flex',flexDirection:'column',alignItems:'center'}}>
-        <div style={{width:72,height:72,borderRadius:22,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,boxShadow:'0 12px 28px -10px var(--green-shadow)'}}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'linear-gradient(160deg,#0D6B47 0%,#08A871 55%,#06C882 100%)'}}>
+      <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'48px 28px 32px',animation:'fadeIn .5s ease'}}>
+        <div style={{width:80,height:80,borderRadius:26,background:'rgba(255,255,255,0.18)',border:'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:22,backdropFilter:'blur(8px)'}}>
+          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
           </svg>
         </div>
-        <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5,textAlign:'center'}}>Livros Online</div>
-        <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginTop:6,textAlign:'center',lineHeight:1.5,marginBottom:32}}>Marketplace de livros escolares usados</div>
-        {(error||err)&&<div style={{width:'100%',background:'#fee2e2',color:'#b91c1c',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:16,textAlign:'center'}}>{error||err}</div>}
-        {loading&&<div style={{fontSize:14,color:'var(--muted)',marginBottom:16}}>Entrando…</div>}
-        <div ref={gBtnRef} style={{display:'flex',justifyContent:'center',width:'100%',minHeight:44}}/>
+        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>Livros Online</div>
+        <div style={{fontSize:15,fontWeight:500,color:'rgba(255,255,255,0.72)',marginTop:10,textAlign:'center',lineHeight:1.55,maxWidth:260}}>Compre e venda livros escolares usados com segurança</div>
+      </div>
+      <div style={{background:'var(--surface)',borderRadius:'28px 28px 0 0',padding:'32px 28px 44px',boxShadow:'0 -8px 48px rgba(0,0,0,0.15)',animation:'slideUp .45s cubic-bezier(.2,1,.4,1)'}}>
+        <div style={{fontSize:22,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4,marginBottom:6}}>Bem-vindo</div>
+        <div style={{fontSize:14,fontWeight:500,color:'var(--muted)',marginBottom:28,lineHeight:1.55}}>Entre com sua conta Google para continuar</div>
+        {(error||err)&&<div style={{background:'#FEF2F2',color:'#DC2626',borderRadius:12,padding:'10px 14px',fontSize:13,fontWeight:600,marginBottom:20,textAlign:'center'}}>{error||err}</div>}
+        {loading&&<div style={{fontSize:14,color:'var(--muted)',marginBottom:16,textAlign:'center'}}>Entrando…</div>}
+        <div ref={gBtnRef} style={{display:'flex',justifyContent:'center',width:'100%',minHeight:48}}/>
+        <div style={{marginTop:22,fontSize:12,color:'var(--muted)',textAlign:'center',lineHeight:1.5}}>Ao entrar, você concorda com nossos termos de uso</div>
       </div>
     </div>
   );
@@ -314,7 +313,7 @@ function RegisterScreen({user,onSave,loading}){
   const meta = user?.user_metadata || {};
   const [name,setName]=React.useState(meta.full_name||'');
   const [school,setSchool]=React.useState(SCHOOLS[0]);
-  const [bairro,setBairro]=React.useState('');
+  const [address,setAddress]=React.useState('');
   const [whatsapp,setWhatsapp]=React.useState('');
   const [err,setErr]=React.useState('');
 
@@ -322,12 +321,11 @@ function RegisterScreen({user,onSave,loading}){
 
   const save=()=>{
     if(!name.trim()){setErr('Informe seu nome completo');return;}
-    if(!bairro.trim()){setErr('Informe seu bairro');return;}
     if(!whatsapp.trim()){setErr('Informe seu WhatsApp');return;}
     setErr('');
     const parts=name.trim().split(' ');
     const initials=(parts[0][0]+(parts.length>1?parts[parts.length-1][0]:parts[0][1]||'')).toUpperCase();
-    onSave({name:name.trim(),school,address:bairro.trim(),whatsapp,initials,color:SUBJECT_HUES[school]||152});
+    onSave({name:name.trim(),school,address,whatsapp,initials,color:SUBJECT_HUES[school]||152});
   };
 
   return(
@@ -349,8 +347,8 @@ function RegisterScreen({user,onSave,loading}){
           </select>
         </div>
         <div>
-          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Bairro *</label>
-          <input value={bairro} onChange={e=>setBairro(e.target.value)} placeholder="Ex: Botafogo, Leblon…" style={INPUT}/>
+          <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>Endereço (opcional)</label>
+          <input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Bairro, cidade" style={INPUT}/>
         </div>
         <div>
           <label style={{fontSize:13,fontWeight:800,color:'var(--ink)',display:'block',marginBottom:8}}>WhatsApp</label>
@@ -358,7 +356,7 @@ function RegisterScreen({user,onSave,loading}){
         </div>
       </div>
       <div style={{padding:'12px 18px 28px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
-        <Button kind="primary" full size="lg" disabled={loading||!name.trim()||!bairro.trim()||!whatsapp.trim()} onClick={save}>
+        <Button kind="primary" full size="lg" disabled={loading||!name.trim()||!whatsapp.trim()} onClick={save}>
           {loading?'Salvando…':'Criar perfil'}
         </Button>
       </div>
@@ -369,19 +367,20 @@ function RegisterScreen({user,onSave,loading}){
 // ─── HOME CARD ───────────────────────────────────────────────
 function HomeCard({book,onOpen,faved,toggleFav}){
   return(
-    <div onClick={()=>onOpen(book.id)} style={{borderRadius:'var(--card-radius)',background:'var(--surface)',boxShadow:'0 2px 12px rgba(0,0,0,0.07)',cursor:'pointer',overflow:'hidden',animation:'fadeIn .25s ease'}}>
-      <div style={{position:'relative',padding:10,paddingBottom:0}}>
+    <div onClick={()=>onOpen(book.id)} style={{borderRadius:'var(--card-radius)',background:'var(--surface)',boxShadow:'0 1px 2px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.06)',cursor:'pointer',overflow:'hidden',animation:'fadeIn .25s ease'}}>
+      <div style={{position:'relative'}}>
         <BookCover book={book}/>
-        <button onClick={e=>{e.stopPropagation();toggleFav(book.id);}} style={{position:'absolute',top:18,right:18,width:32,height:32,borderRadius:'50%',border:'none',background:'rgba(255,255,255,0.85)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
-          <Icon name="heart" size={17} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--muted)'}/>
+        <button onClick={e=>{e.stopPropagation();toggleFav(book.id);}} style={{position:'absolute',top:10,right:10,width:34,height:34,borderRadius:'50%',border:'none',background:faved?'rgba(239,68,68,0.12)':'rgba(255,255,255,0.9)',backdropFilter:'blur(6px)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0,boxShadow:'0 1px 4px rgba(0,0,0,0.12)'}}>
+          <Icon name="heart" size={16} fill={faved?'#ef4444':'none'} color={faved?'#ef4444':'var(--muted)'}/>
         </button>
-        <div style={{position:'absolute',bottom:8,left:18,fontSize:10,fontWeight:700,background:'rgba(255,255,255,0.9)',borderRadius:6,padding:'2px 6px',color:'var(--muted)'}}>{book.school}</div>
+        <div style={{position:'absolute',bottom:10,left:10}}>
+          <ConditionBadge condition={book.condition} small/>
+        </div>
       </div>
-      <div style={{padding:'10px 12px 14px'}}>
-        <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',lineHeight:1.25,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',marginBottom:4}}>{book.title}</div>
-        <div style={{fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:6}}>{book.year} · {book.subject}</div>
-        <div style={{fontSize:16,fontWeight:800,color:'var(--green-d)'}}>{fmt(book.price)}</div>
-        <ConditionBadge condition={book.condition} small/>
+      <div style={{padding:'11px 13px 15px'}}>
+        <div style={{fontSize:13.5,fontWeight:700,color:'var(--ink)',lineHeight:1.3,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',marginBottom:3}}>{book.title}</div>
+        <div style={{fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:8,letterSpacing:0.1}}>{book.subject}</div>
+        <div style={{fontSize:17,fontWeight:800,color:'var(--green-d)',letterSpacing:-0.3}}>{fmt(book.price)}</div>
       </div>
     </div>
   );
@@ -403,46 +402,50 @@ function HomeScreen({go,favs,toggleFav,books}){
 
   return(
     <div style={{background:'var(--bg)',minHeight:'100%'}}>
-      <div style={{padding:'58px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+      <div style={{background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{padding:'58px 18px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.5}}>Livros Online</div>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--muted)',marginTop:1}}>marketplace de livros usados</div>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--green-d)',letterSpacing:0.8,textTransform:'uppercase',marginBottom:2}}>Livros Online</div>
+            <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.7,lineHeight:1.1}}>Vitrine</div>
           </div>
-          <button onClick={()=>go('search')} style={ICONBTN}><Icon name="search" size={21} color="var(--ink)"/></button>
+          <button onClick={()=>go('search')} style={{width:42,height:42,borderRadius:13,border:'none',background:'var(--bg)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <Icon name="search" size={20} color="var(--ink2)"/>
+          </button>
         </div>
-        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',marginBottom:8,paddingBottom:2}}>
-          {schools.map(s=><FilterPill key={s} label={s} active={school===s} onClick={()=>{setSchool(s);setYear('Todos');setSubject('Todos');}}/>)}
-        </div>
-        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',marginBottom:8,paddingBottom:2}}>
-          {years.map(y=><FilterPill key={y} label={y} active={year===y} onClick={()=>{setYear(y);setSubject('Todos');}}/>)}
-        </div>
-        <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',paddingBottom:2}}>
-          {subjects.map(s=><FilterPill key={s} label={s} active={subject===s} onClick={()=>setSubject(s)}/>)}
+        <div style={{overflowX:'auto',scrollbarWidth:'none',padding:'0 18px 4px',display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',gap:7,minWidth:'max-content',paddingBottom:2}}>
+            {schools.map(s=><FilterPill key={s} label={s} active={school===s} onClick={()=>{setSchool(s);setYear('Todos');setSubject('Todos');}}/>)}
+          </div>
+          <div style={{display:'flex',gap:7,minWidth:'max-content',paddingBottom:2}}>
+            {years.filter(y=>y!=='Todos os níveis'?true:true).map(y=><FilterPill key={y} label={y} active={year===y} onClick={()=>{setYear(y);setSubject('Todos');}}/>)}
+          </div>
+          <div style={{display:'flex',gap:7,minWidth:'max-content',paddingBottom:8}}>
+            {subjects.map(s=><FilterPill key={s} label={s} active={subject===s} onClick={()=>setSubject(s)}/>)}
+          </div>
         </div>
       </div>
 
-      <div style={{padding:18}}>
-        <div onClick={()=>go('sell')} style={{borderRadius:18,background:`linear-gradient(120deg,var(--green-d),oklch(0.52 0.14 180))`,padding:'18px 20px',marginBottom:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{padding:'16px 16px 0'}}>
+        <div onClick={()=>go('sell')} style={{borderRadius:20,background:'linear-gradient(130deg,#0D6B47 0%,#08A871 100%)',padding:'20px 22px',marginBottom:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 8px 24px -8px rgba(8,168,113,0.45)'}}>
           <div>
-            <div style={{fontSize:16,fontWeight:800,color:'#fff',marginBottom:4}}>Tem livros parados?</div>
-            <div style={{fontSize:13,fontWeight:500,color:'rgba(255,255,255,0.8)'}}>Anuncie agora e receba no Pix</div>
+            <div style={{fontSize:17,fontWeight:800,color:'#fff',marginBottom:5,letterSpacing:-0.3}}>Tem livros parados?</div>
+            <div style={{fontSize:13,fontWeight:500,color:'rgba(255,255,255,0.78)',lineHeight:1.4}}>Anuncie e receba no Pix</div>
           </div>
-          <div style={{width:44,height:44,borderRadius:13,background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            <Icon name="arrow" size={22} color="#fff"/>
+          <div style={{width:48,height:48,borderRadius:15,background:'rgba(255,255,255,0.18)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,border:'1px solid rgba(255,255,255,0.2)'}}>
+            <Icon name="plus" size={24} color="#fff" strokeWidth={2.5}/>
           </div>
         </div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
-          <div style={{fontSize:17,fontWeight:800,color:'var(--ink)'}}>{list.length} anúncio{list.length!==1?'s':''}</div>
-        </div>
+        {list.length>0&&<div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,letterSpacing:0.3}}>{list.length} LIVRO{list.length!==1?'S':''}</div>}
         {list.length===0?(
-          <div style={{textAlign:'center',padding:'50px 20px',color:'var(--muted)'}}>
-            <Icon name="search" size={40} color="var(--line)"/>
-            <div style={{fontSize:15,fontWeight:700,marginTop:12,color:'var(--ink)'}}>Nenhum livro encontrado</div>
-            <div style={{fontSize:13,marginTop:4}}>Tenta outro filtro ou <span onClick={()=>go('sell')} style={{color:'var(--green-d)',cursor:'pointer',fontWeight:700}}>anuncia o seu</span></div>
+          <div style={{textAlign:'center',padding:'56px 20px',color:'var(--muted)'}}>
+            <div style={{width:64,height:64,borderRadius:20,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',boxShadow:'0 2px 8px rgba(0,0,0,0.06)'}}>
+              <Icon name="search" size={28} color="var(--muted)"/>
+            </div>
+            <div style={{fontSize:16,fontWeight:800,color:'var(--ink)',marginBottom:6}}>Nenhum livro encontrado</div>
+            <div style={{fontSize:13,color:'var(--muted)'}}>Tenta outro filtro ou <span onClick={()=>go('sell')} style={{color:'var(--green-d)',cursor:'pointer',fontWeight:700}}>anuncia o seu</span></div>
           </div>
         ):(
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             {list.map(b=><HomeCard key={b.id} book={b} onOpen={id=>go('detail',{id})} faved={favs.includes(b.id)} toggleFav={toggleFav}/>)}
           </div>
         )}
@@ -458,7 +461,7 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
   const sellerId = book.seller_id || book.sellerId;
   const seller = sellers[sellerId] || {name:'Vendedor',initials:'?',color:200,rating:5,sales:0};
   const faved=favs.includes(book.id);
-  const {buyerPays,buyerFee}=calcFees(book.price);
+  const {buyerPays,halfFee}=calcFees(book.price);
   const isMe = profile && sellerId === profile.id;
   return(
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
@@ -482,7 +485,7 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
           <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo de valores</div>
           {[
             ['Preço anunciado',fmt(book.price),false],
-            ['Taxa da plataforma (8,5%)','+'+fmt(buyerFee),true],
+            ['Taxa plataforma (÷2 comprador)','+'+fmt(halfFee),true],
           ].map(([k,v,m])=>(
             <div key={k} style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
               <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
@@ -663,40 +666,24 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
     await sb.from('messages').insert({chat_id:chat.id,sender_id:profile.id,text:txt});
   };
 
-  const handleDelivery=async(confirmed)=>{
+  const confirmDelivery=async()=>{
     if(!order||!profile||confirmingDelivery)return;
     setConfirmingDelivery(true);
     const isBuyer=profile.id===order.buyer_id;
-    const action=confirmed?(isBuyer?'buyer_confirmed':'seller_confirmed'):(isBuyer?'buyer_refused':'seller_refused');
-    const update=isBuyer
-      ?{buyer_confirmed_delivery:confirmed}
-      :{seller_confirmed_delivery:confirmed};
-    if(!confirmed) update.status='dispute';
-    const newBuyer=isBuyer?confirmed:order.buyer_confirmed_delivery;
-    const newSeller=isBuyer?order.seller_confirmed_delivery:confirmed;
-    if(confirmed&&newBuyer&&newSeller) update.status='completed';
+    const update=isBuyer?{buyer_confirmed_delivery:true}:{seller_confirmed_delivery:true};
+    const newBuyer=isBuyer?true:order.buyer_confirmed_delivery;
+    const newSeller=isBuyer?order.seller_confirmed_delivery:true;
+    const bothDone=newBuyer&&newSeller;
+    if(bothDone) update.status='completed';
     const {data}=await sb.from('orders').update(update).eq('id',order.id).select().single();
-    if(data) setOrder(data);
-    // Notify admin
-    const buyerProf=sellers[order.buyer_id]||{name:'?'};
-    const sellerProf=sellers[order.seller_id]||{name:'?'};
-    await sb.from('notifications').insert({
-      type:'delivery_update',
-      order_id:order.id,
-      book_title:book.title,
-      book_price:book.price,
-      buyer_name:buyerProf.name||profile.name,
-      seller_name:sellerProf.name||profile.name,
-      user_role:isBuyer?'comprador':'vendedor',
-      action:confirmed?'confirmou entrega':'RECUSOU entrega',
-    }).catch(()=>{});
-    if(confirmed&&newBuyer&&newSeller){
-      await sb.from('books').update({status:'sold'}).eq('id',bookId);
-      showToast('Entrega confirmada! Negócio concluído');
-    } else if(!confirmed){
-      showToast('Recusa registrada, entraremos em contato');
-    } else {
-      showToast('Confirmação registrada, aguardando a outra parte');
+    if(data){
+      setOrder(data);
+      if(bothDone){
+        await sb.from('books').update({status:'sold'}).eq('id',bookId);
+        showToast('Entrega confirmada! Negócio concluído');
+      } else {
+        showToast('Confirmacao registrada, aguardando a outra parte');
+      }
     }
     setConfirmingDelivery(false);
   };
@@ -727,23 +714,15 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
           <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
             {order.status==='completed'?'Negocio concluido!':'Pedido em andamento'}
           </div>
-          {order.status==='dispute'&&(
-            <div style={{fontSize:13,fontWeight:700,color:'#b91c1c',marginBottom:4}}>Problema reportado — entraremos em contato.</div>
-          )}
-          {order.status!=='completed'&&order.status!=='dispute'&&(
+          {order.status!=='completed'&&(
             <>
               <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
                 Comprador: {order.buyer_confirmed_delivery?'confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'confirmou':'aguardando'}
               </div>
               {!myConfirmed&&(
-                <div style={{display:'flex',gap:8}}>
-                  <Button kind="danger" size="sm" disabled={confirmingDelivery} onClick={()=>handleDelivery(false)} style={{flex:1}}>
-                    {isBuyer?'Não recebi':'Não entreguei'}
-                  </Button>
-                  <Button kind="primary" size="sm" disabled={confirmingDelivery} onClick={()=>handleDelivery(true)} style={{flex:2}}>
-                    {isBuyer?'Recebi o livro':'Entreguei o livro'}
-                  </Button>
-                </div>
+                <Button kind="primary" full size="sm" disabled={confirmingDelivery} onClick={confirmDelivery}>
+                  Confirmar que recebi o livro
+                </Button>
               )}
               {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
             </>
@@ -784,7 +763,7 @@ function SellScreen({go,onPublish,profile,showToast}){
   const fileRef=React.useRef(null);
 
   const price=Math.max(0,parseFloat(priceStr.replace(',','.'))||0);
-  const {sellerFee,sellerReceives}=calcFees(price);
+  const {halfFee,sellerReceives,buyerPays}=calcFees(price);
   const subjects=SUBJECTS_BY_YEAR[year]||[];
 
   const INPUT={width:'100%',height:50,borderRadius:13,border:'none',boxShadow:'inset 0 0 0 1.5px var(--line)',background:'var(--surface)',padding:'0 15px',fontSize:15,fontFamily:'inherit',fontWeight:600,color:'var(--ink)',outline:'none',boxSizing:'border-box'};
@@ -928,7 +907,7 @@ function SellScreen({go,onPublish,profile,showToast}){
             <div style={{fontSize:13,fontWeight:700,color:'var(--muted)',marginBottom:12,textTransform:'uppercase',letterSpacing:0.5}}>Resumo</div>
             {[
               ['Seu preço',fmt(price),false],
-              ['Taxa da plataforma (8,5%)','– '+fmt(sellerFee),true],
+              ['Taxa plataforma (÷2 vendedor)','– '+fmt(halfFee),true],
             ].map(([k,v,m])=>(
               <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
                 <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>{k}</span>
@@ -940,6 +919,7 @@ function SellScreen({go,onPublish,profile,showToast}){
               <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Você recebe no Pix</span>
               <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(sellerReceives)}</span>
             </div>
+            <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginTop:6}}>Comprador paga {fmt(buyerPays)} (taxa ÷2)</div>
           </div>
         )}
       </div>
@@ -968,7 +948,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [copied,setCopied]=React.useState(false);
   const [confirmed,setConfirmed]=React.useState(false);
   const [saving,setSaving]=React.useState(false);
-  const {buyerPays,buyerFee}=calcFees(book.price);
+  const {buyerPays,halfFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
 
   const copyPix=()=>{
@@ -1024,7 +1004,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         </div>
 
         <div style={{borderRadius:14,background:'oklch(0.96 0.03 50)',padding:12,fontSize:12.5,fontWeight:500,color:'oklch(0.4 0.1 50)',lineHeight:1.5}}>
-          Inclui taxa de serviço de {fmt(buyerFee)} (8,5%)
+          Taxa de {fmt(halfFee)} inclusa (split 50/50 com o vendedor)
         </div>
 
         <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center'}}>
@@ -1058,7 +1038,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
 }
 
 // ─── PROFILE ─────────────────────────────────────────────────
-function ProfileScreen({go,books,setBooks,profile,authUser,onLogout,showToast}){
+function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
   const myBooks=books.filter(b=>(b.seller_id||b.sellerId)===profile?.id);
 
   const deleteBook=async(bookId)=>{
@@ -1138,96 +1118,11 @@ function ProfileScreen({go,books,setBooks,profile,authUser,onLogout,showToast}){
           );
         })}
 
-        {ADMIN_EMAILS.includes(authUser?.email)&&(
-          <div style={{marginTop:16}}>
-            <Button kind="secondary" full onClick={()=>go('admin')}>
-              <Icon name="shield" size={18} color="var(--ink)"/>Painel Admin
-            </Button>
-          </div>
-        )}
-        <div style={{marginTop:12}}>
+        <div style={{marginTop:24}}>
           <Button kind="danger" full onClick={onLogout}>
             <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
           </Button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── ADMIN SCREEN ────────────────────────────────────────────
-function AdminScreen({back,authUser,showToast}){
-  const [books,setBooks]=React.useState([]);
-  const [notifs,setNotifs]=React.useState([]);
-  const [tab,setTab]=React.useState('notifs');
-  const [loading,setLoading]=React.useState(true);
-
-  React.useEffect(()=>{
-    if(!ADMIN_EMAILS.includes(authUser?.email)){back();return;}
-    Promise.all([
-      sb.from('books').select('*, profiles(name)').order('created_at',{ascending:false}),
-      sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
-    ]).then(([bRes,nRes])=>{
-      if(bRes.data) setBooks(bRes.data);
-      if(nRes.data) setNotifs(nRes.data);
-      setLoading(false);
-    });
-  },[]);
-
-  const deleteBook=async(id)=>{
-    await sb.from('books').update({status:'removed'}).eq('id',id);
-    setBooks(prev=>prev.filter(b=>b.id!==id));
-    showToast('Anúncio removido');
-  };
-
-  const markRead=async(id)=>{
-    await sb.from('notifications').update({read:true}).eq('id',id);
-    setNotifs(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
-  };
-
-  return(
-    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
-      <div style={{padding:'54px 18px 14px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)',display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={back} style={ICONBTN}><Icon name="chevL" size={22} color="var(--ink)"/></button>
-        <span style={{fontSize:18,fontWeight:800,color:'var(--ink)',flex:1}}>Painel Admin</span>
-      </div>
-      <div style={{display:'flex',gap:8,padding:'12px 18px 0',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
-        {[['notifs','Notificações'],['books','Anúncios']].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{flex:1,height:38,borderRadius:10,border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:14,fontWeight:700,background:tab===k?'var(--ink)':'transparent',color:tab===k?'#fff':'var(--muted)'}}>
-            {l}{k==='notifs'&&notifs.filter(n=>!n.read).length>0?` (${notifs.filter(n=>!n.read).length})`:''}
-          </button>
-        ))}
-      </div>
-      <div style={{flex:1,overflow:'auto',padding:18,display:'flex',flexDirection:'column',gap:12}}>
-        {loading&&<div style={{textAlign:'center',color:'var(--muted)',paddingTop:40}}>Carregando…</div>}
-        {tab==='notifs'&&notifs.map(n=>(
-          <div key={n.id} style={{borderRadius:16,background:n.read?'var(--surface)':'oklch(0.97 0.04 248)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:14}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13.5,fontWeight:800,color:n.action?.includes('RECUSOU')?'#b91c1c':'var(--green-d)',marginBottom:4}}>
-                  {n.user_role==='comprador'?'Comprador':'Vendedor'} {n.action}
-                </div>
-                <div style={{fontSize:13,fontWeight:600,color:'var(--ink)',marginBottom:2}}>{n.book_title} · {fmt(n.book_price||0)}</div>
-                <div style={{fontSize:12,fontWeight:500,color:'var(--muted)'}}>Comprador: {n.buyer_name} · Vendedor: {n.seller_name}</div>
-                <div style={{fontSize:11,fontWeight:500,color:'var(--muted)',marginTop:4}}>{new Date(n.created_at).toLocaleString('pt-BR')}</div>
-              </div>
-              {!n.read&&<button onClick={()=>markRead(n.id)} style={{flexShrink:0,height:28,padding:'0 10px',borderRadius:8,border:'none',cursor:'pointer',background:'var(--ink)',color:'#fff',fontSize:11,fontWeight:700,fontFamily:'inherit'}}>OK</button>}
-            </div>
-          </div>
-        ))}
-        {tab==='notifs'&&!loading&&notifs.length===0&&<div style={{textAlign:'center',color:'var(--muted)',paddingTop:40}}>Nenhuma notificação ainda</div>}
-        {tab==='books'&&books.map(b=>(
-          <div key={b.id} style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:14,display:'flex',gap:12,alignItems:'center'}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:800,color:'var(--ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</div>
-              <div style={{fontSize:12,fontWeight:600,color:'var(--muted)'}}>{b.profiles?.name||'?'} · {fmt(b.price)}</div>
-              <div style={{fontSize:11,fontWeight:500,color:'var(--muted)',marginTop:2}}>{b.status} · {new Date(b.created_at).toLocaleDateString('pt-BR')}</div>
-            </div>
-            <button onClick={()=>deleteBook(b.id)} style={{flexShrink:0,width:36,height:36,borderRadius:10,border:'none',cursor:'pointer',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <Icon name="trash" size={17} color="#b91c1c"/>
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -1243,20 +1138,22 @@ function BottomNav({current,go}){
     {key:'profile',icon:'user',label:'Perfil'},
   ];
   return(
-    <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:40,background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',paddingBottom:22,display:'flex',alignItems:'flex-start',justifyContent:'space-around',paddingTop:9}}>
+    <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:40,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderTop:'1px solid var(--line)',paddingBottom:20,display:'flex',alignItems:'flex-start',justifyContent:'space-around',paddingTop:10}}>
       {items.map(it=>{
         if(it.center)return(
-          <button key="sell" onClick={()=>go('sell')} style={{border:'none',cursor:'pointer',background:'none',marginTop:-2,padding:0}}>
-            <div style={{width:52,height:52,borderRadius:17,background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 18px -6px var(--green-shadow)'}}>
-              <Icon name="plus" size={26} color="#fff" strokeWidth={2.4}/>
+          <button key="sell" onClick={()=>go('sell')} style={{border:'none',cursor:'pointer',background:'none',marginTop:-12,padding:0}}>
+            <div style={{width:56,height:56,borderRadius:18,background:'linear-gradient(140deg,#08A871,#0D6B47)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 24px -6px rgba(8,168,113,0.55)',border:'3px solid rgba(255,255,255,0.9)'}}>
+              <Icon name="plus" size={26} color="#fff" strokeWidth={2.6}/>
             </div>
           </button>
         );
         const active=current===it.key;
         return(
-          <button key={it.key} onClick={()=>go(it.key)} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0}}>
-            <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
-            <span style={{fontSize:10.5,fontWeight:700,color:active?'var(--green-d)':'var(--muted)'}}>{it.label}</span>
+          <button key={it.key} onClick={()=>go(it.key)} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:4,width:54,padding:0,paddingTop:2}}>
+            <div style={{width:36,height:30,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:10,background:active?'var(--green-light)':'transparent',transition:'background .15s'}}>
+              <Icon name={it.icon} size={22} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green-light)':'none'} strokeWidth={active?2.2:1.8}/>
+            </div>
+            <span style={{fontSize:10,fontWeight:active?800:600,color:active?'var(--green-d)':'var(--muted)',letterSpacing:active?0:-0.1}}>{it.label}</span>
           </button>
         );
       })}
@@ -1267,7 +1164,7 @@ function BottomNav({current,go}){
 // ─── PHONE SHELL WRAPPER ─────────────────────────────────────
 function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
   return(
-    <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#e8e8ed'}}>
+    <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#111111'}}>
       <div className="phone-shell" style={{width:390,height:844,borderRadius:48,overflow:'hidden',position:'relative',background:'var(--bg)',boxShadow:'0 40px 80px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.12)',fontFamily:'-apple-system,system-ui,sans-serif',WebkitFontSmoothing:'antialiased'}}>
         <div className="phone-notch" style={{position:'absolute',top:11,left:'50%',transform:'translateX(-50%)',width:126,height:37,borderRadius:24,background:'#000',zIndex:50}}/>
         <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
@@ -1452,7 +1349,7 @@ function App(){
       screen=<ChatListScreen go={go} chats={chats} profile={profile} sellers={sellers} books={books}/>;
       break;
     case 'profile':
-      screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={profile} authUser={authUser} onLogout={handleLogout} showToast={showToast}/>;
+      screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={profile} onLogout={handleLogout} showToast={showToast}/>;
       break;
     case 'detail':
       screen=<DetailScreen id={cur.params.id} back={back} go={go} favs={favs} toggleFav={toggleFav} books={books} profile={profile} sellers={sellers}/>;
@@ -1465,9 +1362,6 @@ function App(){
       break;
     case 'chatThread':
       screen=<ChatThreadScreen chatId={cur.params?.chatId} sellerId={cur.params?.sellerId} bookId={cur.params?.bookId} back={back} go={go} profile={profile} sellers={sellers} books={books} showToast={showToast}/>;
-      break;
-    case 'admin':
-      screen=<AdminScreen back={back} authUser={authUser} showToast={showToast}/>;
       break;
     case 'publishSuccess':{
       const d=cur.params||{};
