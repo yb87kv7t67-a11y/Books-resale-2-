@@ -1508,61 +1508,53 @@ function App(){
 
     const goApp=async(user)=>{
       if(started)return; started=true;
-      currentUserId=user.id;
       setAuthUser(user);
-      const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
-      if(prof&&prof.name){
-        setProfile(prof);
-        setAppState('app');
-        loadBooks(); loadChats(user.id);
+      try{
+        const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+        if(prof&&prof.name){
+          setProfile(prof);
+          setAppState('app');
+          loadBooks(); loadChats(user.id);
 
-        // Request notification permission
-        if('Notification' in window && Notification.permission==='default'){
-          Notification.requestPermission();
-        }
+          realtimeChan=sb.channel('books-rt')
+            .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
+              setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
+            }).subscribe();
 
-        realtimeChan=sb.channel('books-rt')
-          .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
-            setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
-          }).subscribe();
-
-        // Global message listener — notifica quando chega mensagem de outra pessoa
-        const {data:userChats}=await sb.from('chats').select('id,book_id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
-        const chatIds=(userChats||[]).map(c=>c.id);
-        if(chatIds.length>0){
-          msgChan=sb.channel('global-msgs-'+user.id)
-            .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
-              const msg=pl.new;
-              if(!chatIds.includes(msg.chat_id))return;
-              if(msg.sender_id===user.id)return;
-              setStack(s=>{currentStack=s;return s;});
-              const onChatScreen=currentStack&&currentStack[currentStack.length-1]?.screen==='chatThread'&&currentStack[currentStack.length-1]?.params?.chatId===msg.chat_id;
-              if(!onChatScreen){
-                pushNotif('💬 Nova mensagem',msg.text?.substring(0,80)||'…',()=>{});
-                setUnreadMsgs(n=>n+1);
+          // Setup notifications after app is running — wrapped in try/catch so errors never block login
+          setTimeout(async()=>{
+            try{
+              if('Notification' in window && Notification.permission==='default'){
+                await Notification.requestPermission();
               }
-            })
-            .subscribe();
-        }
+              const {data:userChats}=await sb.from('chats').select('id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+              const chatIds=(userChats||[]).map(c=>c.id);
+              if(chatIds.length>0){
+                msgChan=sb.channel('global-msgs-'+user.id)
+                  .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
+                    const msg=pl.new;
+                    if(!chatIds.includes(msg.chat_id))return;
+                    if(msg.sender_id===user.id)return;
+                    pushNotif('💬 Nova mensagem',msg.text?.substring(0,80)||'…',()=>{});
+                    setUnreadMsgs(n=>n+1);
+                  })
+                  .subscribe();
+              }
+              orderChan=sb.channel('orders-rt-'+user.id)
+                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
+                  const o=pl.new;
+                  if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
+                  if(o.status==='completed') pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.',()=>{});
+                  else if(o.status==='disputed') pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega.',()=>{});
+                  else if(o.buyer_confirmed_delivery&&o.seller_id===user.id) pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.',()=>{});
+                  else if(o.seller_confirmed_delivery&&o.buyer_id===user.id) pushNotif('📦 Vendedor confirmou','O vendedor confirmou a entrega.',()=>{});
+                })
+                .subscribe();
+            }catch(e){}
+          },1500);
 
-        // Order status listener — notifica confirmação de entrega
-        orderChan=sb.channel('orders-rt-'+user.id)
-          .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
-            const o=pl.new;
-            if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
-            if(o.status==='completed'){
-              pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.',()=>{});
-            } else if(o.status==='disputed'){
-              pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega. Verificaremos em breve.',()=>{});
-            } else if(o.buyer_confirmed_delivery&&o.seller_id===user.id){
-              pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.',()=>{});
-            } else if(o.seller_confirmed_delivery&&o.buyer_id===user.id){
-              pushNotif('📦 Vendedor confirmou','O vendedor confirmou que entregou o livro.',()=>{});
-            }
-          })
-          .subscribe();
-
-      } else { setAppState('register'); }
+        } else { setAppState('register'); }
+      }catch(e){ setAppState('login'); started=false; }
     };
 
     const boot=async()=>{
