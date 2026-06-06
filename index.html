@@ -1390,7 +1390,7 @@ function AdminScreen({back,profile,showToast}){
 }
 
 // ─── BOTTOM NAV ──────────────────────────────────────────────
-function BottomNav({current,go}){
+function BottomNav({current,go,unread=0,onChatOpen}){
   const items=[
     {key:'home',icon:'home',label:'Início'},
     {key:'search',icon:'search',label:'Buscar'},
@@ -1409,9 +1409,11 @@ function BottomNav({current,go}){
           </button>
         );
         const active=current===it.key;
+        const hasUnread=it.key==='chat'&&unread>0;
         return(
-          <button key={it.key} onClick={()=>go(it.key)} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0}}>
+          <button key={it.key} onClick={()=>{go(it.key);if(it.key==='chat'&&onChatOpen)onChatOpen();}} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0,position:'relative'}}>
             <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
+            {hasUnread&&<span style={{position:'absolute',top:-2,right:8,minWidth:16,height:16,borderRadius:999,background:'#ef4444',fontSize:9.5,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unread>9?'9+':unread}</span>}
             <span style={{fontSize:10.5,fontWeight:700,color:active?'var(--green-d)':'var(--muted)'}}>{it.label}</span>
           </button>
         );
@@ -1429,7 +1431,7 @@ function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
         <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
           {children}
         </div>
-        {showNav&&<BottomNav current={rootTab} go={go}/>}
+        {showNav&&<BottomNav current={rootTab} go={go} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}/>}
         <div className="phone-home-bar" style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,height:34,display:'flex',justifyContent:'center',alignItems:'flex-end',paddingBottom:8,pointerEvents:'none'}}>
           <div style={{width:139,height:5,borderRadius:100,background:'rgba(0,0,0,0.25)'}}/>
         </div>
@@ -1452,6 +1454,19 @@ function App(){
   const [favs,setFavs]=React.useState([]);
   const [stack,setStack]=React.useState([{screen:'home'}]);
   const [toast,setToast]=React.useState('');
+  const [unreadMsgs,setUnreadMsgs]=React.useState(0);
+
+  const pushNotif=React.useCallback((title,body,onClick)=>{
+    if(!('Notification' in window))return;
+    const send=()=>{
+      const n=new Notification(title,{body,icon:'/icon.svg',badge:'/icon.svg'});
+      if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
+    };
+    if(Notification.permission==='granted') send();
+    else if(Notification.permission!=='denied'){
+      Notification.requestPermission().then(p=>{if(p==='granted')send();});
+    }
+  },[]);
 
   const showToast=React.useCallback((msg)=>{setToast(msg);},[]);
   const go=React.useCallback((screen,params)=>{
@@ -1486,18 +1501,67 @@ function App(){
     let realtimeChan=null;
     let started=false;
 
+    let msgChan=null;
+    let orderChan=null;
+    let currentUserId=null;
+    let currentStack=null;
+
     const goApp=async(user)=>{
       if(started)return; started=true;
+      currentUserId=user.id;
       setAuthUser(user);
       const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
       if(prof&&prof.name){
         setProfile(prof);
         setAppState('app');
         loadBooks(); loadChats(user.id);
+
+        // Request notification permission
+        if('Notification' in window && Notification.permission==='default'){
+          Notification.requestPermission();
+        }
+
         realtimeChan=sb.channel('books-rt')
           .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
             setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
           }).subscribe();
+
+        // Global message listener — notifica quando chega mensagem de outra pessoa
+        const {data:userChats}=await sb.from('chats').select('id,book_id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+        const chatIds=(userChats||[]).map(c=>c.id);
+        if(chatIds.length>0){
+          msgChan=sb.channel('global-msgs-'+user.id)
+            .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
+              const msg=pl.new;
+              if(!chatIds.includes(msg.chat_id))return;
+              if(msg.sender_id===user.id)return;
+              setStack(s=>{currentStack=s;return s;});
+              const onChatScreen=currentStack&&currentStack[currentStack.length-1]?.screen==='chatThread'&&currentStack[currentStack.length-1]?.params?.chatId===msg.chat_id;
+              if(!onChatScreen){
+                pushNotif('💬 Nova mensagem',msg.text?.substring(0,80)||'…',()=>{});
+                setUnreadMsgs(n=>n+1);
+              }
+            })
+            .subscribe();
+        }
+
+        // Order status listener — notifica confirmação de entrega
+        orderChan=sb.channel('orders-rt-'+user.id)
+          .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
+            const o=pl.new;
+            if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
+            if(o.status==='completed'){
+              pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.',()=>{});
+            } else if(o.status==='disputed'){
+              pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega. Verificaremos em breve.',()=>{});
+            } else if(o.buyer_confirmed_delivery&&o.seller_id===user.id){
+              pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.',()=>{});
+            } else if(o.seller_confirmed_delivery&&o.buyer_id===user.id){
+              pushNotif('📦 Vendedor confirmou','O vendedor confirmou que entregou o livro.',()=>{});
+            }
+          })
+          .subscribe();
+
       } else { setAppState('register'); }
     };
 
@@ -1533,12 +1597,16 @@ function App(){
         setAppState('login');
         setAuthUser(null);setProfile(null);setBooks([]);setChats([]);
         if(realtimeChan)sb.removeChannel(realtimeChan);
+        if(msgChan)sb.removeChannel(msgChan);
+        if(orderChan)sb.removeChannel(orderChan);
       }
     });
 
     return ()=>{
       subscription.unsubscribe();
       if(realtimeChan)sb.removeChannel(realtimeChan);
+      if(msgChan)sb.removeChannel(msgChan);
+      if(orderChan)sb.removeChannel(orderChan);
     };
   },[]);
 
