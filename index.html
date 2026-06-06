@@ -75,7 +75,6 @@ alter table profiles add column if not exists status text default 'active';
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
@@ -962,19 +961,8 @@ function SellScreen({go,onPublish,profile,showToast}){
 
 // ─── CHECKOUT ────────────────────────────────────────────────
 function PixQR({value,size=180}){
-  const canvasRef=React.useRef(null);
-  React.useEffect(()=>{
-    if(!canvasRef.current||!value)return;
-    const render=()=>{
-      if(window.QRCode){
-        window.QRCode.toCanvas(canvasRef.current,value,{width:size,margin:1,color:{dark:'#0C0C0C',light:'#FFFFFF'}},()=>{});
-      } else {
-        setTimeout(render,300);
-      }
-    };
-    render();
-  },[value,size]);
-  return <canvas ref={canvasRef} width={size} height={size} style={{borderRadius:10,display:'block'}}/>;
+  const url='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&margin=10&data='+encodeURIComponent(value);
+  return <img src={url} width={size} height={size} alt="QR Pix" style={{borderRadius:10,display:'block'}}/>;
 }
 
 function CheckoutScreen({id,back,go,books,profile,showToast}){
