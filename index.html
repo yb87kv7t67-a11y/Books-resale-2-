@@ -75,6 +75,7 @@ alter table profiles add column if not exists status text default 'active';
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
@@ -133,6 +134,32 @@ const SUBJECT_HUES = {'Matemática':152,'Português':248,'Literatura':25,'Físic
 function calcFees(price){
   const buyerFee=price*FEE_EACH, sellerFee=price*FEE_EACH;
   return {buyerFee,sellerFee,buyerPays:price+buyerFee,sellerReceives:price-sellerFee};
+}
+
+function calcCRC16(str){
+  let crc=0xFFFF;
+  for(let i=0;i<str.length;i++){
+    crc^=str.charCodeAt(i)<<8;
+    for(let j=0;j<8;j++){crc=crc&0x8000?(crc<<1)^0x1021:crc<<1;crc&=0xFFFF;}
+  }
+  return crc;
+}
+function gerarPix(chave,nome,cidade,valor){
+  const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
+  const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
+  const gui=f('00','br.gov.bcb.pix')+f('01',chave);
+  let payload=
+    f('00','01')+
+    f('26',gui)+
+    f('52','0000')+
+    f('53','986')+
+    f('54',valor.toFixed(2))+
+    f('58','BR')+
+    f('59',norm(nome).substring(0,25))+
+    f('60',norm(cidade).substring(0,15))+
+    f('62',f('05','***'))+
+    '6304';
+  return payload+calcCRC16(payload).toString(16).toUpperCase().padStart(4,'0');
 }
 
 // ─── ICON ────────────────────────────────────────────────────
@@ -700,30 +727,34 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
         <Icon name="chevR" size={18} color="var(--muted)"/>
       </button>
 
-      {order&&(
-        <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,background:order.status==='completed'?'oklch(0.96 0.04 152)':order.status==='disputed'?'oklch(0.97 0.03 25)':'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
-          <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
-            {order.status==='completed'?'✅ Negócio concluído!':order.status==='disputed'?'⚠️ Problema reportado':'Pedido em andamento'}
+      {order&&order.status!=='completed'&&order.status!=='disputed'&&(
+        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--ink)',marginBottom:6}}>Pedido em andamento — confirme a entrega</div>
+          <div style={{fontSize:11.5,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
+            Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
           </div>
-          {order.status==='disputed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>}
-          {order.status!=='completed'&&order.status!=='disputed'&&(
-            <>
-              <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
-                Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
+          {myConfirmed
+            ?<div style={{fontSize:12.5,fontWeight:700,color:'var(--green-d)'}}>✓ Você já confirmou. Aguardando a outra parte.</div>
+            :(
+              <div style={{display:'flex',gap:8}}>
+                <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>Recusar</Button>
+                <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
+                  {isBuyer?'Recebi o livro ✓':'Entregue ✓'}
+                </Button>
               </div>
-              {!myConfirmed&&(
-                <div style={{display:'flex',gap:8}}>
-                  <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>
-                    Recusar
-                  </Button>
-                  <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
-                    {isBuyer?'Recebi o livro':'Entregue'}
-                  </Button>
-                </div>
-              )}
-              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
-            </>
-          )}
+            )
+          }
+        </div>
+      )}
+      {order&&order.status==='completed'&&(
+        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.96 0.04 152)',boxShadow:'inset 0 0 0 1.5px rgba(8,168,113,0.2)'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'var(--green-d)'}}>✅ Negócio concluído! Obrigado.</div>
+        </div>
+      )}
+      {order&&order.status==='disputed'&&(
+        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.97 0.03 25)',boxShadow:'inset 0 0 0 1.5px rgba(220,100,30,0.15)'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'oklch(0.48 0.14 25)',marginBottom:3}}>⚠️ Problema reportado</div>
+          <div style={{fontSize:12,fontWeight:500,color:'oklch(0.48 0.14 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>
         </div>
       )}
 
@@ -930,13 +961,20 @@ function SellScreen({go,onPublish,profile,showToast}){
 }
 
 // ─── CHECKOUT ────────────────────────────────────────────────
-function FakeQR({size=160}){
-  const N=21,cell=size/N;const cells=[];let seed=7;
-  const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
-  const finder=(r,c)=>(r<7&&c<7)||(r<7&&c>=N-7)||(r>=N-7&&c<7);
-  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(finder(r,c))continue;if(rnd()>0.55)cells.push(<rect key={r+'-'+c} x={c*cell} y={r*cell} width={cell} height={cell} rx={cell*0.2} fill="var(--ink)"/>);}
-  const Finder=({x,y})=>(<g><rect x={x*cell} y={y*cell} width={cell*7} height={cell*7} rx={cell*1.6} fill="var(--ink)"/><rect x={(x+1)*cell} y={(y+1)*cell} width={cell*5} height={cell*5} rx={cell} fill="#fff"/><rect x={(x+2)*cell} y={(y+2)*cell} width={cell*3} height={cell*3} rx={cell*0.6} fill="var(--ink)"/></g>);
-  return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{cells}<Finder x={0} y={0}/><Finder x={N-7} y={0}/><Finder x={0} y={N-7}/></svg>;
+function PixQR({value,size=180}){
+  const canvasRef=React.useRef(null);
+  React.useEffect(()=>{
+    if(!canvasRef.current||!value)return;
+    const render=()=>{
+      if(window.QRCode){
+        window.QRCode.toCanvas(canvasRef.current,value,{width:size,margin:1,color:{dark:'#0C0C0C',light:'#FFFFFF'}},()=>{});
+      } else {
+        setTimeout(render,300);
+      }
+    };
+    render();
+  },[value,size]);
+  return <canvas ref={canvasRef} width={size} height={size} style={{borderRadius:10,display:'block'}}/>;
 }
 
 function CheckoutScreen({id,back,go,books,profile,showToast}){
@@ -947,9 +985,10 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [saving,setSaving]=React.useState(false);
   const {buyerPays,buyerFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
+  const pixCode=gerarPix(PIX_KEY,'Livros Online','Rio de Janeiro',buyerPays);
 
   const copyPix=()=>{
-    navigator.clipboard.writeText(PIX_KEY)
+    navigator.clipboard.writeText(pixCode)
       .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1800);})
       .catch(()=>showToast('Nao foi possivel copiar'));
   };
@@ -1007,15 +1046,15 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center'}}>
           <div style={{fontSize:13.5,fontWeight:700,color:'var(--muted)'}}>Escaneie para pagar</div>
           <div style={{fontSize:30,fontWeight:800,color:'var(--green-d)',margin:'4px 0 16px'}}>{fmt(buyerPays)}</div>
-          <div style={{padding:14,borderRadius:16,background:'#fff',boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)'}}><FakeQR/></div>
+          <div style={{padding:14,borderRadius:16,background:'#fff',boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)'}}><PixQR value={pixCode}/></div>
 
           <div style={{marginTop:16,width:'100%',padding:'12px 14px',borderRadius:13,background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-            <div>
-              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5}}>Chave Pix</div>
-              <div style={{fontSize:18,fontWeight:800,color:'var(--ink)',letterSpacing:1}}>{PIX_KEY}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:2}}>Pix Copia e Cola</div>
+              <div style={{fontSize:11.5,fontWeight:600,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pixCode.substring(0,32)}…</div>
             </div>
-            <button onClick={copyPix} style={{height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-              <Icon name={copied?'check':'copy'} size={15} color={copied?'var(--green-d)':'#fff'}/>{copied?'Copiado!':'Copiar chave Pix'}
+            <button onClick={copyPix} style={{flexShrink:0,height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6}}>
+              <Icon name={copied?'check':'copy'} size={15} color={copied?'var(--green-d)':'#fff'}/>{copied?'Copiado!':'Copiar'}
             </button>
           </div>
         </div>
