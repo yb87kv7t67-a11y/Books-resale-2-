@@ -1,4 +1,4 @@
-const CACHE_NAME = 'livros-online-v12';
+const CACHE_NAME = 'livros-online-v13';
 
 const SHELL_URLS = [
   '/',
@@ -12,6 +12,7 @@ const CDN_URLS = [
   'https://unpkg.com/react-dom@18/umd/react-dom.development.js',
   'https://unpkg.com/@babel/standalone/babel.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js',
 ];
 
 // Install: pre-cache shell
