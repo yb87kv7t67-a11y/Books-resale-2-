@@ -145,7 +145,7 @@ function calcCRC16(str){
 }
 function gerarPix(chave,nome,cidade,valor){
   const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
-  const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
+  const norm=s=>s.replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
   const gui=f('00','br.gov.bcb.pix')+f('01',chave);
   let payload=
     f('00','01')+
