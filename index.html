@@ -63,11 +63,11 @@ alter table profiles add column if not exists status text default 'active';
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>Livros Online</title>
+<title>PageSell</title>
 <meta name="theme-color" content="#1f9d57"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="Livros Online"/>
+<meta name="apple-mobile-web-app-title" content="PageSell"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="apple-touch-icon" href="/icon.svg"/>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -323,7 +323,7 @@ function LoginScreen({error}){
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
           </svg>
         </div>
-        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>Livros Online</div>
+        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>PageSell</div>
         <div style={{fontSize:15,fontWeight:500,color:'rgba(255,255,255,0.72)',marginTop:10,textAlign:'center',lineHeight:1.55,maxWidth:260}}>Compre e venda livros escolares usados com segurança</div>
       </div>
       <div style={{background:'var(--surface)',borderRadius:'28px 28px 0 0',padding:'32px 28px 48px',boxShadow:'0 -8px 48px rgba(0,0,0,0.15)',animation:'slideUp .45s cubic-bezier(.2,1,.4,1)'}}>
@@ -415,7 +415,7 @@ function HomeScreen({go,favs,toggleFav,books}){
       <div style={{background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
         <div style={{padding:'58px 18px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>Livros Online</div>
+            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>PageSell</div>
             <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.7,lineHeight:1.1}}>Vitrine</div>
           </div>
           <button onClick={()=>go('search')} style={{width:42,height:42,borderRadius:13,border:'none',background:'var(--bg)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Icon name="search" size={20} color="var(--ink2)"/></button>
@@ -973,7 +973,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [saving,setSaving]=React.useState(false);
   const {buyerPays,buyerFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
-  const pixCode=gerarPix(PIX_KEY,'Livros Online','Rio de Janeiro',buyerPays);
+  const pixCode=gerarPix(PIX_KEY,'PageSell','Rio de Janeiro',buyerPays);
 
   const copyPix=()=>{
     navigator.clipboard.writeText(pixCode)
@@ -1149,7 +1149,11 @@ function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
             </button>
           </div>
         )}
-        <div style={{marginTop:18}}>
+        <a href="https://instagram.com/thepagesell_" target="_blank" rel="noopener" style={{marginTop:18,display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'14px 0',borderRadius:16,background:'linear-gradient(120deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)',textDecoration:'none'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none"/></svg>
+          <span style={{color:'#fff',fontWeight:800,fontSize:15}}>@thepagesell_</span>
+        </a>
+        <div style={{marginTop:12}}>
           <Button kind="danger" full onClick={onLogout}>
             <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
           </Button>
@@ -1390,7 +1394,7 @@ function AdminScreen({back,profile,showToast}){
 }
 
 // ─── BOTTOM NAV ──────────────────────────────────────────────
-function BottomNav({current,go}){
+function BottomNav({current,go,unread=0,onChatOpen}){
   const items=[
     {key:'home',icon:'home',label:'Início'},
     {key:'search',icon:'search',label:'Buscar'},
@@ -1409,9 +1413,11 @@ function BottomNav({current,go}){
           </button>
         );
         const active=current===it.key;
+        const hasUnread=it.key==='chat'&&unread>0;
         return(
-          <button key={it.key} onClick={()=>go(it.key)} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0}}>
+          <button key={it.key} onClick={()=>{go(it.key);if(it.key==='chat'&&onChatOpen)onChatOpen();}} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0,position:'relative'}}>
             <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
+            {hasUnread&&<span style={{position:'absolute',top:-2,right:8,minWidth:16,height:16,borderRadius:999,background:'#ef4444',fontSize:9.5,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unread>9?'9+':unread}</span>}
             <span style={{fontSize:10.5,fontWeight:700,color:active?'var(--green-d)':'var(--muted)'}}>{it.label}</span>
           </button>
         );
@@ -1421,7 +1427,7 @@ function BottomNav({current,go}){
 }
 
 // ─── PHONE SHELL WRAPPER ─────────────────────────────────────
-function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
+function PhoneShell({children,showNav,go,rootTab,toast,setToast,unread,onChatOpen}){
   return(
     <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#e8e8ed'}}>
       <div className="phone-shell" style={{width:390,height:844,borderRadius:48,overflow:'hidden',position:'relative',background:'var(--bg)',boxShadow:'0 40px 80px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.12)',fontFamily:'-apple-system,system-ui,sans-serif',WebkitFontSmoothing:'antialiased'}}>
@@ -1429,7 +1435,7 @@ function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
         <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
           {children}
         </div>
-        {showNav&&<BottomNav current={rootTab} go={go}/>}
+        {showNav&&<BottomNav current={rootTab} go={go} unread={unread} onChatOpen={onChatOpen}/>}
         <div className="phone-home-bar" style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,height:34,display:'flex',justifyContent:'center',alignItems:'flex-end',paddingBottom:8,pointerEvents:'none'}}>
           <div style={{width:139,height:5,borderRadius:100,background:'rgba(0,0,0,0.25)'}}/>
         </div>
@@ -1452,6 +1458,14 @@ function App(){
   const [favs,setFavs]=React.useState([]);
   const [stack,setStack]=React.useState([{screen:'home'}]);
   const [toast,setToast]=React.useState('');
+  const [unreadMsgs,setUnreadMsgs]=React.useState(0);
+
+  const pushNotif=React.useCallback((title,body)=>{
+    try{
+      if(!('Notification' in window)||Notification.permission!=='granted')return;
+      new Notification(title,{body,icon:'/icon.svg'});
+    }catch(e){}
+  },[]);
 
   const showToast=React.useCallback((msg)=>{setToast(msg);},[]);
   const go=React.useCallback((screen,params)=>{
@@ -1484,21 +1498,53 @@ function App(){
 
   React.useEffect(()=>{
     let realtimeChan=null;
+    let msgChan=null;
+    let orderChan=null;
     let started=false;
 
     const goApp=async(user)=>{
       if(started)return; started=true;
       setAuthUser(user);
-      const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
-      if(prof&&prof.name){
-        setProfile(prof);
-        setAppState('app');
-        loadBooks(); loadChats(user.id);
-        realtimeChan=sb.channel('books-rt')
-          .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
-            setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
-          }).subscribe();
-      } else { setAppState('register'); }
+      try{
+        const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+        if(prof&&prof.name){
+          setProfile(prof);
+          setAppState('app');
+          loadBooks(); loadChats(user.id);
+          realtimeChan=sb.channel('books-rt')
+            .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
+              setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
+            }).subscribe();
+          // Setup notifications after app is shown — never blocks login
+          setTimeout(async()=>{
+            try{
+              if('Notification' in window && Notification.permission==='default'){
+                await Notification.requestPermission();
+              }
+              const {data:uc}=await sb.from('chats').select('id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+              const chatIds=(uc||[]).map(c=>c.id);
+              if(chatIds.length>0){
+                msgChan=sb.channel('notif-msgs-'+user.id)
+                  .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
+                    const msg=pl.new;
+                    if(!chatIds.includes(msg.chat_id)||msg.sender_id===user.id)return;
+                    pushNotif('💬 Nova mensagem no PageSell',msg.text?.substring(0,80)||'…');
+                    setUnreadMsgs(n=>n+1);
+                  }).subscribe();
+              }
+              orderChan=sb.channel('notif-orders-'+user.id)
+                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
+                  const o=pl.new;
+                  if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
+                  if(o.status==='completed') pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.');
+                  else if(o.status==='disputed') pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega.');
+                  else if(o.buyer_confirmed_delivery&&o.seller_id===user.id) pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.');
+                  else if(o.seller_confirmed_delivery&&o.buyer_id===user.id) pushNotif('📦 Vendedor confirmou','O vendedor confirmou a entrega.');
+                }).subscribe();
+            }catch(e){}
+          },1500);
+        } else { setAppState('register'); }
+      }catch(e){ started=false; setAppState('login'); }
     };
 
     const boot=async()=>{
@@ -1533,12 +1579,16 @@ function App(){
         setAppState('login');
         setAuthUser(null);setProfile(null);setBooks([]);setChats([]);
         if(realtimeChan)sb.removeChannel(realtimeChan);
+        if(msgChan)sb.removeChannel(msgChan);
+        if(orderChan)sb.removeChannel(orderChan);
       }
     });
 
     return ()=>{
       subscription.unsubscribe();
       if(realtimeChan)sb.removeChannel(realtimeChan);
+      if(msgChan)sb.removeChannel(msgChan);
+      if(orderChan)sb.removeChannel(orderChan);
     };
   },[]);
 
@@ -1651,7 +1701,7 @@ function App(){
   }
 
   return(
-    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}>
       {screen}
     </PhoneShell>
   );
