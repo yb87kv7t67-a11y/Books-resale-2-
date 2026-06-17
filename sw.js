@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pagesell-v1';
+const CACHE_NAME = 'pagesell-v2';
 
 const SHELL_URLS = [
   '/',
