@@ -63,11 +63,11 @@ alter table profiles add column if not exists status text default 'active';
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>Livros Online</title>
+<title>PageSell</title>
 <meta name="theme-color" content="#1f9d57"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="Livros Online"/>
+<meta name="apple-mobile-web-app-title" content="PageSell"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="apple-touch-icon" href="/icon.svg"/>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -145,20 +145,14 @@ function calcCRC16(str){
 }
 function gerarPix(chave,nome,cidade,valor){
   const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
-  const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
+  const norm=s=>s.replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
   const gui=f('00','br.gov.bcb.pix')+f('01',chave);
-  let payload=
-    f('00','01')+
-    f('26',gui)+
-    f('52','0000')+
-    f('53','986')+
-    f('54',valor.toFixed(2))+
-    f('58','BR')+
-    f('59',norm(nome).substring(0,25))+
-    f('60',norm(cidade).substring(0,15))+
-    f('62',f('05','***'))+
-    '6304';
+  let payload=f('00','01')+f('26',gui)+f('52','0000')+f('53','986')+f('54',valor.toFixed(2))+f('58','BR')+f('59',norm(nome).substring(0,25))+f('60',norm(cidade).substring(0,15))+f('62',f('05','***'))+'6304';
   return payload+calcCRC16(payload).toString(16).toUpperCase().padStart(4,'0');
+}
+function PixQR({value,size=180}){
+  const url='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&margin=10&data='+encodeURIComponent(value);
+  return <img src={url} width={size} height={size} alt="QR Pix" style={{borderRadius:10,display:'block'}}/>;
 }
 
 // ─── ICON ────────────────────────────────────────────────────
@@ -323,7 +317,7 @@ function LoginScreen({error}){
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
           </svg>
         </div>
-        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>Livros Online</div>
+        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>PageSell</div>
         <div style={{fontSize:15,fontWeight:500,color:'rgba(255,255,255,0.72)',marginTop:10,textAlign:'center',lineHeight:1.55,maxWidth:260}}>Compre e venda livros escolares usados com segurança</div>
       </div>
       <div style={{background:'var(--surface)',borderRadius:'28px 28px 0 0',padding:'32px 28px 48px',boxShadow:'0 -8px 48px rgba(0,0,0,0.15)',animation:'slideUp .45s cubic-bezier(.2,1,.4,1)'}}>
@@ -415,7 +409,7 @@ function HomeScreen({go,favs,toggleFav,books}){
       <div style={{background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
         <div style={{padding:'58px 18px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>Livros Online</div>
+            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>PageSell</div>
             <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.7,lineHeight:1.1}}>Vitrine</div>
           </div>
           <button onClick={()=>go('search')} style={{width:42,height:42,borderRadius:13,border:'none',background:'var(--bg)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Icon name="search" size={20} color="var(--ink2)"/></button>
@@ -726,34 +720,30 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
         <Icon name="chevR" size={18} color="var(--muted)"/>
       </button>
 
-      {order&&order.status!=='completed'&&order.status!=='disputed'&&(
-        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
-          <div style={{fontSize:12,fontWeight:700,color:'var(--ink)',marginBottom:6}}>Pedido em andamento — confirme a entrega</div>
-          <div style={{fontSize:11.5,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
-            Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
+      {order&&(
+        <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,background:order.status==='completed'?'oklch(0.96 0.04 152)':order.status==='disputed'?'oklch(0.97 0.03 25)':'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
+            {order.status==='completed'?'✅ Negócio concluído!':order.status==='disputed'?'⚠️ Problema reportado':'Pedido em andamento'}
           </div>
-          {myConfirmed
-            ?<div style={{fontSize:12.5,fontWeight:700,color:'var(--green-d)'}}>✓ Você já confirmou. Aguardando a outra parte.</div>
-            :(
-              <div style={{display:'flex',gap:8}}>
-                <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>Recusar</Button>
-                <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
-                  {isBuyer?'Recebi o livro ✓':'Entregue ✓'}
-                </Button>
+          {order.status==='disputed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>}
+          {order.status!=='completed'&&order.status!=='disputed'&&(
+            <>
+              <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
+                Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
               </div>
-            )
-          }
-        </div>
-      )}
-      {order&&order.status==='completed'&&(
-        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.96 0.04 152)',boxShadow:'inset 0 0 0 1.5px rgba(8,168,113,0.2)'}}>
-          <div style={{fontSize:13,fontWeight:800,color:'var(--green-d)'}}>✅ Negócio concluído! Obrigado.</div>
-        </div>
-      )}
-      {order&&order.status==='disputed'&&(
-        <div style={{margin:'10px 14px 0',padding:13,borderRadius:14,background:'oklch(0.97 0.03 25)',boxShadow:'inset 0 0 0 1.5px rgba(220,100,30,0.15)'}}>
-          <div style={{fontSize:13,fontWeight:800,color:'oklch(0.48 0.14 25)',marginBottom:3}}>⚠️ Problema reportado</div>
-          <div style={{fontSize:12,fontWeight:500,color:'oklch(0.48 0.14 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>
+              {!myConfirmed&&(
+                <div style={{display:'flex',gap:8}}>
+                  <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>
+                    Recusar
+                  </Button>
+                  <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
+                    {isBuyer?'Recebi o livro':'Entregue'}
+                  </Button>
+                </div>
+              )}
+              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
+            </>
+          )}
         </div>
       )}
 
@@ -960,9 +950,13 @@ function SellScreen({go,onPublish,profile,showToast}){
 }
 
 // ─── CHECKOUT ────────────────────────────────────────────────
-function PixQR({value,size=180}){
-  const url='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&margin=10&data='+encodeURIComponent(value);
-  return <img src={url} width={size} height={size} alt="QR Pix" style={{borderRadius:10,display:'block'}}/>;
+function FakeQR({size=160}){
+  const N=21,cell=size/N;const cells=[];let seed=7;
+  const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+  const finder=(r,c)=>(r<7&&c<7)||(r<7&&c>=N-7)||(r>=N-7&&c<7);
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(finder(r,c))continue;if(rnd()>0.55)cells.push(<rect key={r+'-'+c} x={c*cell} y={r*cell} width={cell} height={cell} rx={cell*0.2} fill="var(--ink)"/>);}
+  const Finder=({x,y})=>(<g><rect x={x*cell} y={y*cell} width={cell*7} height={cell*7} rx={cell*1.6} fill="var(--ink)"/><rect x={(x+1)*cell} y={(y+1)*cell} width={cell*5} height={cell*5} rx={cell} fill="#fff"/><rect x={(x+2)*cell} y={(y+2)*cell} width={cell*3} height={cell*3} rx={cell*0.6} fill="var(--ink)"/></g>);
+  return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{cells}<Finder x={0} y={0}/><Finder x={N-7} y={0}/><Finder x={0} y={N-7}/></svg>;
 }
 
 function CheckoutScreen({id,back,go,books,profile,showToast}){
@@ -973,7 +967,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [saving,setSaving]=React.useState(false);
   const {buyerPays,buyerFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
-  const pixCode=gerarPix(PIX_KEY,'Livros Online','Rio de Janeiro',buyerPays);
+  const pixCode=gerarPix(PIX_KEY,'PageSell','Rio de Janeiro',buyerPays);
 
   const copyPix=()=>{
     navigator.clipboard.writeText(pixCode)
@@ -1037,11 +1031,11 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
           <div style={{padding:14,borderRadius:16,background:'#fff',boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)'}}><PixQR value={pixCode}/></div>
 
           <div style={{marginTop:16,width:'100%',padding:'12px 14px',borderRadius:13,background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:2}}>Pix Copia e Cola</div>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5}}>Pix Copia e Cola</div>
               <div style={{fontSize:11.5,fontWeight:600,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pixCode.substring(0,32)}…</div>
             </div>
-            <button onClick={copyPix} style={{flexShrink:0,height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6}}>
+            <button onClick={copyPix} style={{height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
               <Icon name={copied?'check':'copy'} size={15} color={copied?'var(--green-d)':'#fff'}/>{copied?'Copiado!':'Copiar'}
             </button>
           </div>
@@ -1149,6 +1143,10 @@ function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
             </button>
           </div>
         )}
+        <a href="https://instagram.com/thepagesell_" target="_blank" rel="noopener" style={{marginTop:18,display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'14px 0',borderRadius:16,background:'linear-gradient(120deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)',textDecoration:'none'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none"/></svg>
+          <span style={{color:'#fff',fontWeight:800,fontSize:15}}>@thepagesell_</span>
+        </a>
         <div style={{marginTop:18}}>
           <Button kind="danger" full onClick={onLogout}>
             <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
@@ -1409,11 +1407,10 @@ function BottomNav({current,go,unread=0,onChatOpen}){
           </button>
         );
         const active=current===it.key;
-        const hasUnread=it.key==='chat'&&unread>0;
         return(
           <button key={it.key} onClick={()=>{go(it.key);if(it.key==='chat'&&onChatOpen)onChatOpen();}} style={{border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:56,padding:0,position:'relative'}}>
             <Icon name={it.icon} size={24} color={active?'var(--green-d)':'var(--muted)'} fill={active?'var(--green)':'none'} strokeWidth={active?0:1.9}/>
-            {hasUnread&&<span style={{position:'absolute',top:-2,right:8,minWidth:16,height:16,borderRadius:999,background:'#ef4444',fontSize:9.5,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unread>9?'9+':unread}</span>}
+            {it.key==='chat'&&unread>0&&<span style={{position:'absolute',top:-2,right:8,minWidth:16,height:16,borderRadius:999,background:'#ef4444',fontSize:9.5,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unread>9?'9+':unread}</span>}
             <span style={{fontSize:10.5,fontWeight:700,color:active?'var(--green-d)':'var(--muted)'}}>{it.label}</span>
           </button>
         );
@@ -1423,7 +1420,7 @@ function BottomNav({current,go,unread=0,onChatOpen}){
 }
 
 // ─── PHONE SHELL WRAPPER ─────────────────────────────────────
-function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
+function PhoneShell({children,showNav,go,rootTab,toast,setToast,unread,onChatOpen}){
   return(
     <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#e8e8ed'}}>
       <div className="phone-shell" style={{width:390,height:844,borderRadius:48,overflow:'hidden',position:'relative',background:'var(--bg)',boxShadow:'0 40px 80px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.12)',fontFamily:'-apple-system,system-ui,sans-serif',WebkitFontSmoothing:'antialiased'}}>
@@ -1431,7 +1428,7 @@ function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
         <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
           {children}
         </div>
-        {showNav&&<BottomNav current={rootTab} go={go} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}/>}
+        {showNav&&<BottomNav current={rootTab} go={go} unread={unread} onChatOpen={onChatOpen}/>}
         <div className="phone-home-bar" style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,height:34,display:'flex',justifyContent:'center',alignItems:'flex-end',paddingBottom:8,pointerEvents:'none'}}>
           <div style={{width:139,height:5,borderRadius:100,background:'rgba(0,0,0,0.25)'}}/>
         </div>
@@ -1456,16 +1453,11 @@ function App(){
   const [toast,setToast]=React.useState('');
   const [unreadMsgs,setUnreadMsgs]=React.useState(0);
 
-  const pushNotif=React.useCallback((title,body,onClick)=>{
-    if(!('Notification' in window))return;
-    const send=()=>{
-      const n=new Notification(title,{body,icon:'/icon.svg',badge:'/icon.svg'});
-      if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
-    };
-    if(Notification.permission==='granted') send();
-    else if(Notification.permission!=='denied'){
-      Notification.requestPermission().then(p=>{if(p==='granted')send();});
-    }
+  const pushNotif=React.useCallback((title,body)=>{
+    try{
+      if(!('Notification' in window)||Notification.permission!=='granted')return;
+      new Notification(title,{body,icon:'/icon.svg'});
+    }catch(e){}
   },[]);
 
   const showToast=React.useCallback((msg)=>{setToast(msg);},[]);
@@ -1501,67 +1493,36 @@ function App(){
     let realtimeChan=null;
     let started=false;
 
-    let msgChan=null;
-    let orderChan=null;
-    let currentUserId=null;
-    let currentStack=null;
-
     const goApp=async(user)=>{
       if(started)return; started=true;
-      currentUserId=user.id;
       setAuthUser(user);
       const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
       if(prof&&prof.name){
         setProfile(prof);
         setAppState('app');
         loadBooks(); loadChats(user.id);
-
-        // Request notification permission
-        if('Notification' in window && Notification.permission==='default'){
-          Notification.requestPermission();
-        }
-
+        setTimeout(async()=>{
+          try{
+            if('Notification' in window && Notification.permission==='default'){
+              await Notification.requestPermission();
+            }
+            const {data:uc}=await sb.from('chats').select('id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+            const chatIds=(uc||[]).map(c=>c.id);
+            if(chatIds.length>0){
+              sb.channel('notif-msgs-'+user.id)
+                .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
+                  const msg=pl.new;
+                  if(!chatIds.includes(msg.chat_id)||msg.sender_id===user.id)return;
+                  pushNotif('Nova mensagem no PageSell',msg.text?.substring(0,80)||'...');
+                  setUnreadMsgs(n=>n+1);
+                }).subscribe();
+            }
+          }catch(e){}
+        },1500);
         realtimeChan=sb.channel('books-rt')
           .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
             setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
           }).subscribe();
-
-        // Global message listener — notifica quando chega mensagem de outra pessoa
-        const {data:userChats}=await sb.from('chats').select('id,book_id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
-        const chatIds=(userChats||[]).map(c=>c.id);
-        if(chatIds.length>0){
-          msgChan=sb.channel('global-msgs-'+user.id)
-            .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
-              const msg=pl.new;
-              if(!chatIds.includes(msg.chat_id))return;
-              if(msg.sender_id===user.id)return;
-              setStack(s=>{currentStack=s;return s;});
-              const onChatScreen=currentStack&&currentStack[currentStack.length-1]?.screen==='chatThread'&&currentStack[currentStack.length-1]?.params?.chatId===msg.chat_id;
-              if(!onChatScreen){
-                pushNotif('💬 Nova mensagem',msg.text?.substring(0,80)||'…',()=>{});
-                setUnreadMsgs(n=>n+1);
-              }
-            })
-            .subscribe();
-        }
-
-        // Order status listener — notifica confirmação de entrega
-        orderChan=sb.channel('orders-rt-'+user.id)
-          .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
-            const o=pl.new;
-            if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
-            if(o.status==='completed'){
-              pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.',()=>{});
-            } else if(o.status==='disputed'){
-              pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega. Verificaremos em breve.',()=>{});
-            } else if(o.buyer_confirmed_delivery&&o.seller_id===user.id){
-              pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.',()=>{});
-            } else if(o.seller_confirmed_delivery&&o.buyer_id===user.id){
-              pushNotif('📦 Vendedor confirmou','O vendedor confirmou que entregou o livro.',()=>{});
-            }
-          })
-          .subscribe();
-
       } else { setAppState('register'); }
     };
 
@@ -1597,16 +1558,12 @@ function App(){
         setAppState('login');
         setAuthUser(null);setProfile(null);setBooks([]);setChats([]);
         if(realtimeChan)sb.removeChannel(realtimeChan);
-        if(msgChan)sb.removeChannel(msgChan);
-        if(orderChan)sb.removeChannel(orderChan);
       }
     });
 
     return ()=>{
       subscription.unsubscribe();
       if(realtimeChan)sb.removeChannel(realtimeChan);
-      if(msgChan)sb.removeChannel(msgChan);
-      if(orderChan)sb.removeChannel(orderChan);
     };
   },[]);
 
@@ -1719,7 +1676,7 @@ function App(){
   }
 
   return(
-    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
+    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}>
       {screen}
     </PhoneShell>
   );
