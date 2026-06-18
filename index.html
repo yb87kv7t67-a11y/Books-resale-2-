@@ -145,7 +145,7 @@ function calcCRC16(str){
 }
 function gerarPix(chave,nome,cidade,valor){
   const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
-  const norm=s=>s.replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
+const norm=s=>s.replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
   const gui=f('00','br.gov.bcb.pix')+f('01',chave);
   let payload=f('00','01')+f('26',gui)+f('52','0000')+f('53','986')+f('54',valor.toFixed(2))+f('58','BR')+f('59',norm(nome).substring(0,25))+f('60',norm(cidade).substring(0,15))+f('62',f('05','***'))+'6304';
   return payload+calcCRC16(payload).toString(16).toUpperCase().padStart(4,'0');
