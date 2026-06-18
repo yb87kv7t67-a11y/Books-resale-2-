@@ -63,11 +63,11 @@ alter table profiles add column if not exists status text default 'active';
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>PageSell</title>
+<title>Livros Online</title>
 <meta name="theme-color" content="#1f9d57"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="PageSell"/>
+<meta name="apple-mobile-web-app-title" content="Livros Online"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="apple-touch-icon" href="/icon.svg"/>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -145,7 +145,7 @@ function calcCRC16(str){
 }
 function gerarPix(chave,nome,cidade,valor){
   const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
-  const norm=s=>s.replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
+  const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9 ]/g,'');
   const gui=f('00','br.gov.bcb.pix')+f('01',chave);
   let payload=
     f('00','01')+
@@ -323,7 +323,7 @@ function LoginScreen({error}){
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
           </svg>
         </div>
-        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>PageSell</div>
+        <div style={{fontSize:34,fontWeight:800,color:'#fff',letterSpacing:-1,textAlign:'center',lineHeight:1.1}}>Livros Online</div>
         <div style={{fontSize:15,fontWeight:500,color:'rgba(255,255,255,0.72)',marginTop:10,textAlign:'center',lineHeight:1.55,maxWidth:260}}>Compre e venda livros escolares usados com segurança</div>
       </div>
       <div style={{background:'var(--surface)',borderRadius:'28px 28px 0 0',padding:'32px 28px 48px',boxShadow:'0 -8px 48px rgba(0,0,0,0.15)',animation:'slideUp .45s cubic-bezier(.2,1,.4,1)'}}>
@@ -415,7 +415,7 @@ function HomeScreen({go,favs,toggleFav,books}){
       <div style={{background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
         <div style={{padding:'58px 18px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>PageSell</div>
+            <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>Livros Online</div>
             <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.7,lineHeight:1.1}}>Vitrine</div>
           </div>
           <button onClick={()=>go('search')} style={{width:42,height:42,borderRadius:13,border:'none',background:'var(--bg)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Icon name="search" size={20} color="var(--ink2)"/></button>
@@ -973,7 +973,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const [saving,setSaving]=React.useState(false);
   const {buyerPays,buyerFee}=calcFees(book.price);
   const sellerId = book.seller_id || book.sellerId;
-  const pixCode=gerarPix(PIX_KEY,'PageSell','Rio de Janeiro',buyerPays);
+  const pixCode=gerarPix(PIX_KEY,'Livros Online','Rio de Janeiro',buyerPays);
 
   const copyPix=()=>{
     navigator.clipboard.writeText(pixCode)
@@ -1149,11 +1149,7 @@ function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
             </button>
           </div>
         )}
-        <a href="https://instagram.com/thepagesell_" target="_blank" rel="noopener" style={{marginTop:18,display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'14px 0',borderRadius:16,background:'linear-gradient(120deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)',textDecoration:'none'}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none"/></svg>
-          <span style={{color:'#fff',fontWeight:800,fontSize:15}}>@thepagesell_</span>
-        </a>
-        <div style={{marginTop:12}}>
+        <div style={{marginTop:18}}>
           <Button kind="danger" full onClick={onLogout}>
             <Icon name="logout" size={18} color="#b91c1c"/>Sair da conta
           </Button>
@@ -1427,7 +1423,7 @@ function BottomNav({current,go,unread=0,onChatOpen}){
 }
 
 // ─── PHONE SHELL WRAPPER ─────────────────────────────────────
-function PhoneShell({children,showNav,go,rootTab,toast,setToast,unread,onChatOpen}){
+function PhoneShell({children,showNav,go,rootTab,toast,setToast}){
   return(
     <div className="phone-outer" style={{width:'100%',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px 0',background:'#e8e8ed'}}>
       <div className="phone-shell" style={{width:390,height:844,borderRadius:48,overflow:'hidden',position:'relative',background:'var(--bg)',boxShadow:'0 40px 80px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.12)',fontFamily:'-apple-system,system-ui,sans-serif',WebkitFontSmoothing:'antialiased'}}>
@@ -1435,7 +1431,7 @@ function PhoneShell({children,showNav,go,rootTab,toast,setToast,unread,onChatOpe
         <div style={{height:'100%',overflow:'auto',WebkitOverflowScrolling:'touch',paddingBottom:showNav?80:0}}>
           {children}
         </div>
-        {showNav&&<BottomNav current={rootTab} go={go} unread={unread} onChatOpen={onChatOpen}/>}
+        {showNav&&<BottomNav current={rootTab} go={go} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}/>}
         <div className="phone-home-bar" style={{position:'absolute',bottom:0,left:0,right:0,zIndex:60,height:34,display:'flex',justifyContent:'center',alignItems:'flex-end',paddingBottom:8,pointerEvents:'none'}}>
           <div style={{width:139,height:5,borderRadius:100,background:'rgba(0,0,0,0.25)'}}/>
         </div>
@@ -1460,11 +1456,16 @@ function App(){
   const [toast,setToast]=React.useState('');
   const [unreadMsgs,setUnreadMsgs]=React.useState(0);
 
-  const pushNotif=React.useCallback((title,body)=>{
-    try{
-      if(!('Notification' in window)||Notification.permission!=='granted')return;
-      new Notification(title,{body,icon:'/icon.svg'});
-    }catch(e){}
+  const pushNotif=React.useCallback((title,body,onClick)=>{
+    if(!('Notification' in window))return;
+    const send=()=>{
+      const n=new Notification(title,{body,icon:'/icon.svg',badge:'/icon.svg'});
+      if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
+    };
+    if(Notification.permission==='granted') send();
+    else if(Notification.permission!=='denied'){
+      Notification.requestPermission().then(p=>{if(p==='granted')send();});
+    }
   },[]);
 
   const showToast=React.useCallback((msg)=>{setToast(msg);},[]);
@@ -1498,53 +1499,70 @@ function App(){
 
   React.useEffect(()=>{
     let realtimeChan=null;
+    let started=false;
+
     let msgChan=null;
     let orderChan=null;
-    let started=false;
+    let currentUserId=null;
+    let currentStack=null;
 
     const goApp=async(user)=>{
       if(started)return; started=true;
+      currentUserId=user.id;
       setAuthUser(user);
-      try{
-        const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
-        if(prof&&prof.name){
-          setProfile(prof);
-          setAppState('app');
-          loadBooks(); loadChats(user.id);
-          realtimeChan=sb.channel('books-rt')
-            .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
-              setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
-            }).subscribe();
-          // Setup notifications after app is shown — never blocks login
-          setTimeout(async()=>{
-            try{
-              if('Notification' in window && Notification.permission==='default'){
-                await Notification.requestPermission();
+      const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+      if(prof&&prof.name){
+        setProfile(prof);
+        setAppState('app');
+        loadBooks(); loadChats(user.id);
+
+        // Request notification permission
+        if('Notification' in window && Notification.permission==='default'){
+          Notification.requestPermission();
+        }
+
+        realtimeChan=sb.channel('books-rt')
+          .on('postgres_changes',{event:'INSERT',schema:'public',table:'books'},pl=>{
+            setBooks(prev=>prev.find(b=>b.id===pl.new.id)?prev:[pl.new,...prev]);
+          }).subscribe();
+
+        // Global message listener — notifica quando chega mensagem de outra pessoa
+        const {data:userChats}=await sb.from('chats').select('id,book_id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+        const chatIds=(userChats||[]).map(c=>c.id);
+        if(chatIds.length>0){
+          msgChan=sb.channel('global-msgs-'+user.id)
+            .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
+              const msg=pl.new;
+              if(!chatIds.includes(msg.chat_id))return;
+              if(msg.sender_id===user.id)return;
+              setStack(s=>{currentStack=s;return s;});
+              const onChatScreen=currentStack&&currentStack[currentStack.length-1]?.screen==='chatThread'&&currentStack[currentStack.length-1]?.params?.chatId===msg.chat_id;
+              if(!onChatScreen){
+                pushNotif('💬 Nova mensagem',msg.text?.substring(0,80)||'…',()=>{});
+                setUnreadMsgs(n=>n+1);
               }
-              const {data:uc}=await sb.from('chats').select('id').or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
-              const chatIds=(uc||[]).map(c=>c.id);
-              if(chatIds.length>0){
-                msgChan=sb.channel('notif-msgs-'+user.id)
-                  .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},pl=>{
-                    const msg=pl.new;
-                    if(!chatIds.includes(msg.chat_id)||msg.sender_id===user.id)return;
-                    pushNotif('💬 Nova mensagem no PageSell',msg.text?.substring(0,80)||'…');
-                    setUnreadMsgs(n=>n+1);
-                  }).subscribe();
-              }
-              orderChan=sb.channel('notif-orders-'+user.id)
-                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
-                  const o=pl.new;
-                  if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
-                  if(o.status==='completed') pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.');
-                  else if(o.status==='disputed') pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega.');
-                  else if(o.buyer_confirmed_delivery&&o.seller_id===user.id) pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.');
-                  else if(o.seller_confirmed_delivery&&o.buyer_id===user.id) pushNotif('📦 Vendedor confirmou','O vendedor confirmou a entrega.');
-                }).subscribe();
-            }catch(e){}
-          },1500);
-        } else { setAppState('register'); }
-      }catch(e){ started=false; setAppState('login'); }
+            })
+            .subscribe();
+        }
+
+        // Order status listener — notifica confirmação de entrega
+        orderChan=sb.channel('orders-rt-'+user.id)
+          .on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders'},pl=>{
+            const o=pl.new;
+            if(o.buyer_id!==user.id&&o.seller_id!==user.id)return;
+            if(o.status==='completed'){
+              pushNotif('✅ Entrega confirmada!','Os dois confirmaram. Negócio concluído.',()=>{});
+            } else if(o.status==='disputed'){
+              pushNotif('⚠️ Problema reportado','Um dos lados recusou a entrega. Verificaremos em breve.',()=>{});
+            } else if(o.buyer_confirmed_delivery&&o.seller_id===user.id){
+              pushNotif('📦 Comprador confirmou','O comprador confirmou que recebeu o livro.',()=>{});
+            } else if(o.seller_confirmed_delivery&&o.buyer_id===user.id){
+              pushNotif('📦 Vendedor confirmou','O vendedor confirmou que entregou o livro.',()=>{});
+            }
+          })
+          .subscribe();
+
+      } else { setAppState('register'); }
     };
 
     const boot=async()=>{
@@ -1701,7 +1719,7 @@ function App(){
   }
 
   return(
-    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast} unread={unreadMsgs} onChatOpen={()=>setUnreadMsgs(0)}>
+    <PhoneShell showNav={showNav} go={go} rootTab={rootTab} toast={toast} setToast={setToast}>
       {screen}
     </PhoneShell>
   );
