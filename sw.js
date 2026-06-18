@@ -1,11 +1,4 @@
-const CACHE_NAME = 'livros-online-v15';
-
-const SHELL_URLS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon.svg',
-];
+const CACHE_NAME = 'pagesell-v3';
 
 const CDN_URLS = [
   'https://unpkg.com/react@18/umd/react.development.js',
@@ -14,17 +7,12 @@ const CDN_URLS = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
 ];
 
-// Install: pre-cache shell
+// Install: skip waiting immediately
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      // Cache shell files (may fail on first load if offline, that's fine)
-      return cache.addAll(SHELL_URLS).catch(() => {});
-    }).then(() => self.skipWaiting())
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
-// Activate: clean old caches
+// Activate: clean old caches, claim clients
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -33,23 +21,31 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch: cache-first for shell + CDN, network-first for API
+// Fetch: network-first for HTML (always fresh), cache-first for CDN only
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET requests and Supabase API calls
   if (event.request.method !== 'GET') return;
   if (url.hostname.includes('supabase.co')) return;
 
-  const isCDN = CDN_URLS.some(u => event.request.url.startsWith(u)) ||
-                url.hostname === 'unpkg.com' ||
+  const isCDN = url.hostname === 'unpkg.com' ||
                 url.hostname === 'cdn.jsdelivr.net' ||
                 url.hostname === 'accounts.google.com';
 
-  const isShell = SHELL_URLS.includes(url.pathname) || url.pathname === '/';
+  const isHTML = url.pathname === '/' || url.pathname.endsWith('.html');
 
-  if (isShell || isCDN) {
-    // Cache-first strategy
+  if (isHTML) {
+    // Network-first: always get fresh HTML
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match(event.request)
+      )
+    );
+    return;
+  }
+
+  if (isCDN) {
+    // Cache-first for CDN resources
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached;
@@ -59,9 +55,8 @@ self.addEventListener('fetch', event => {
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
           return response;
-        }).catch(() => cached);
+        });
       })
     );
   }
-  // All other requests: network only (no caching)
 });
