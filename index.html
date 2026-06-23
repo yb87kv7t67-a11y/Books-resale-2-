@@ -711,13 +711,15 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
 
       {order&&(
         <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,background:order.status==='completed'?'oklch(0.96 0.04 152)':order.status==='disputed'?'oklch(0.97 0.03 25)':'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
-          <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:8}}>
-            {order.status==='completed'?'✅ Negócio concluído!':order.status==='disputed'?'⚠️ Problema reportado':'Pedido em andamento'}
+          <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:6}}>
+            {order.status==='completed'?'✅ Compra confirmada!':order.status==='disputed'?'⚠️ Problema reportado':'Confirmar compra'}
           </div>
           {order.status==='disputed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>}
+          {order.status==='completed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.38 0.1 152)',lineHeight:1.4}}>O pagamento será liberado em até 24h.</div>}
           {order.status!=='completed'&&order.status!=='disputed'&&(
             <>
               <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
+                O pagamento será feito até 24h após ambos confirmarem.{'\n'}
                 Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
               </div>
               {!myConfirmed&&(
@@ -726,11 +728,11 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
                     Recusar
                   </Button>
                   <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
-                    {isBuyer?'Recebi o livro':'Entregue'}
+                    Confirmar compra
                   </Button>
                 </div>
               )}
-              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
+              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Confirmação registrada, aguardando a outra parte.</div>}
             </>
           )}
         </div>
@@ -930,7 +932,10 @@ function SellScreen({go,onPublish,profile,showToast}){
           </div>
         )}
       </div>
-      <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)'}}>
+      <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{borderRadius:12,background:'oklch(0.97 0.03 248)',padding:'10px 14px',fontSize:12.5,fontWeight:500,color:'oklch(0.38 0.1 248)',lineHeight:1.55,textAlign:'center'}}>
+          O pagamento será feito até 24h após o vendedor e o comprador confirmarem a compra.
+        </div>
         <Button kind="primary" full size="lg" disabled={price<=0||!title.trim()||publishing||uploading} onClick={publish}>
           {publishing?'Publicando…':'Publicar anúncio'}
         </Button>
