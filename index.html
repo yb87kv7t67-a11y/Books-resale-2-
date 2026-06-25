@@ -710,31 +710,69 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
       </button>
 
       {order&&(
-        <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,background:order.status==='completed'?'oklch(0.96 0.04 152)':order.status==='disputed'?'oklch(0.97 0.03 25)':'oklch(0.97 0.03 248)',boxShadow:'inset 0 0 0 1.5px var(--line)'}}>
+        <div style={{margin:'12px 14px 0',padding:14,borderRadius:14,boxShadow:'inset 0 0 0 1.5px var(--line)',background:
+          order.status==='completed'?'oklch(0.96 0.04 152)':
+          order.status==='disputed'||order.status==='cancelled'?'oklch(0.97 0.03 25)':
+          'oklch(0.97 0.03 248)'}}>
           <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:6}}>
-            {order.status==='completed'?'✅ Compra confirmada!':order.status==='disputed'?'⚠️ Problema reportado':'Confirmar compra'}
+            {order.status==='completed'?'✅ Negócio concluído!':
+             order.status==='disputed'?'⚠️ Problema reportado':
+             order.status==='cancelled'?'❌ Pedido recusado':
+             order.status==='pending'?'🛒 Pedido aguardando confirmação':
+             order.status==='payment_confirmed'?'📦 Confirmar entrega':'Pedido'}
           </div>
-          {order.status==='disputed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>}
-          {order.status==='completed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.38 0.1 152)',lineHeight:1.4}}>O pagamento será liberado em até 24h.</div>}
-          {order.status!=='completed'&&order.status!=='disputed'&&(
+
+          {order.status==='pending'&&!isBuyer&&(
             <>
               <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
-                O pagamento será feito até 24h após ambos confirmarem.{'\n'}
-                Comprador: {order.buyer_confirmed_delivery?'✓ confirmou':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ confirmou':'aguardando'}
+                O comprador já fez o Pix. Aceite para confirmar a venda.
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={async()=>{
+                  setConfirmingDelivery(true);
+                  await sb.from('orders').update({status:'cancelled'}).eq('id',order.id);
+                  await sb.from('notifications').insert({type:'order_cancelled',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Pedido de "${book.title}" foi recusado pelo vendedor.`}).catch(()=>{});
+                  setOrder(prev=>({...prev,status:'cancelled'}));
+                  setConfirmingDelivery(false);
+                }}>Recusar</Button>
+                <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={async()=>{
+                  setConfirmingDelivery(true);
+                  await sb.from('orders').update({status:'payment_confirmed'}).eq('id',order.id);
+                  await sb.from('notifications').insert({type:'order_accepted',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Pedido de "${book.title}" foi aceito! Combine a entrega no chat.`}).catch(()=>{});
+                  setOrder(prev=>({...prev,status:'payment_confirmed'}));
+                  setConfirmingDelivery(false);
+                }}>✓ Aceitar pedido</Button>
+              </div>
+            </>
+          )}
+
+          {order.status==='pending'&&isBuyer&&(
+            <div style={{fontSize:12,fontWeight:500,color:'oklch(0.38 0.1 248)',lineHeight:1.4}}>Aguardando o vendedor aceitar. Você será notificado.</div>
+          )}
+
+          {order.status==='cancelled'&&(
+            <div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>O vendedor recusou o pedido. Entre em contato com a PageSell se já fez o pagamento.</div>
+          )}
+
+          {order.status==='payment_confirmed'&&(
+            <>
+              <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
+                Comprador: {order.buyer_confirmed_delivery?'✓ recebi o livro':'aguardando'} &nbsp;|&nbsp; Vendedor: {order.seller_confirmed_delivery?'✓ entreguei':'aguardando'}
               </div>
               {!myConfirmed&&(
                 <div style={{display:'flex',gap:8}}>
-                  <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>
-                    Recusar
-                  </Button>
+                  <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(true)}>Problema</Button>
                   <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={()=>confirmDelivery(false)}>
-                    Confirmar compra
+                    {isBuyer?'✓ Recebi o livro':'✓ Já entreguei'}
                   </Button>
                 </div>
               )}
-              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Confirmação registrada, aguardando a outra parte.</div>}
+              {myConfirmed&&<div style={{fontSize:12.5,fontWeight:600,color:'var(--green-d)'}}>Sua confirmação registrada, aguardando a outra parte.</div>}
             </>
           )}
+
+          {order.status==='completed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.38 0.1 152)',lineHeight:1.4}}>Pagamento liberado em até 24h. Obrigado!</div>}
+          {order.status==='disputed'&&<div style={{fontSize:12,fontWeight:500,color:'oklch(0.45 0.12 25)',lineHeight:1.4}}>Nossa equipe vai verificar e entrar em contato em breve.</div>}
         </div>
       )}
 
@@ -975,9 +1013,13 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
     setSaving(true);
     try{
       const {error}=await sb.from('orders').insert({
-        book_id:id,buyer_id:profile.id,seller_id:sellerId,status:'payment_confirmed'
+        book_id:id,buyer_id:profile.id,seller_id:sellerId,status:'pending'
       });
       if(error)throw error;
+      await sb.from('notifications').insert({
+        type:'new_order',user_id:sellerId,book_id:id,
+        message:`${profile.name} quer comprar "${book.title}" por ${fmt(book.price)}. Confirme no chat!`
+      }).catch(()=>{});
       setConfirmed(true);
     }catch(err){
       showToast('Erro: '+err.message);
@@ -991,8 +1033,8 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         <div style={{width:88,height:88,borderRadius:'50%',background:'var(--green)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 14px 34px -12px var(--green-shadow)',marginBottom:22,animation:'pop .4s cubic-bezier(.2,1.3,.4,1)'}}>
           <Icon name="check" size={44} color="#fff" strokeWidth={3.2}/>
         </div>
-        <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4}}>Pagamento confirmado!</div>
-        <div style={{fontSize:14.5,fontWeight:500,color:'var(--muted)',marginTop:10,maxWidth:290,lineHeight:1.5}}>Combine a retirada de "{book.title}" pelo chat com o vendedor.</div>
+        <div style={{fontSize:24,fontWeight:800,color:'var(--ink)',letterSpacing:-0.4}}>Pedido enviado!</div>
+        <div style={{fontSize:14.5,fontWeight:500,color:'var(--muted)',marginTop:10,maxWidth:290,lineHeight:1.5}}>O vendedor foi notificado e precisa aceitar o pedido. Acompanhe pelo chat.</div>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         <Button kind="primary" full size="lg" onClick={()=>go('chatThread',{sellerId,bookId:id})}>Ver chat com vendedor</Button>
