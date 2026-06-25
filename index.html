@@ -601,8 +601,8 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
 
   const loadOrder=React.useCallback(async()=>{
     if(!bookId)return;
-    const {data}=await sb.from('orders').select('*').eq('book_id',bookId).maybeSingle();
-    setOrder(data||null);
+    const {data}=await sb.from('orders').select('*').eq('book_id',bookId).order('created_at',{ascending:false}).limit(1);
+    setOrder((data&&data[0])||null);
   },[bookId]);
 
   const loadOrCreateChat=React.useCallback(async()=>{
@@ -636,6 +636,36 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
       .subscribe();
     return ()=>sb.removeChannel(sub);
   },[chat]);
+
+  React.useEffect(()=>{
+    if(!bookId)return;
+    const sub=sb.channel('order-'+bookId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`book_id=eq.${bookId}`},payload=>{
+        if(payload.new) setOrder(payload.new);
+      })
+      .subscribe();
+    return ()=>sb.removeChannel(sub);
+  },[bookId]);
+
+  const acceptOrder=async()=>{
+    if(!order||confirmingDelivery)return;
+    setConfirmingDelivery(true);
+    await sb.from('orders').update({status:'payment_confirmed'}).eq('id',order.id);
+    await sb.from('notifications').insert({type:'order_accepted',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Seu pedido de "${book.title}" foi aceito! Combine a entrega no chat.`}).catch(()=>{});
+    setOrder(prev=>({...prev,status:'payment_confirmed'}));
+    showToast('Pedido aceito!');
+    setConfirmingDelivery(false);
+  };
+
+  const refuseOrder=async()=>{
+    if(!order||confirmingDelivery)return;
+    setConfirmingDelivery(true);
+    await sb.from('orders').update({status:'cancelled'}).eq('id',order.id);
+    await sb.from('notifications').insert({type:'order_cancelled',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Pedido de "${book.title}" foi recusado pelo vendedor.`}).catch(()=>{});
+    setOrder(prev=>({...prev,status:'cancelled'}));
+    showToast('Pedido recusado.');
+    setConfirmingDelivery(false);
+  };
 
   React.useEffect(()=>{
     if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight;
@@ -725,23 +755,11 @@ function ChatThreadScreen({chatId,sellerId,bookId,back,go,profile,sellers,books,
           {order.status==='pending'&&!isBuyer&&(
             <>
               <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10,lineHeight:1.4}}>
-                O comprador já fez o Pix. Aceite para confirmar a venda.
+                O comprador já fez o pagamento. Aceite para confirmar a venda.
               </div>
               <div style={{display:'flex',gap:8}}>
-                <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={async()=>{
-                  setConfirmingDelivery(true);
-                  await sb.from('orders').update({status:'cancelled'}).eq('id',order.id);
-                  await sb.from('notifications').insert({type:'order_cancelled',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Pedido de "${book.title}" foi recusado pelo vendedor.`}).catch(()=>{});
-                  setOrder(prev=>({...prev,status:'cancelled'}));
-                  setConfirmingDelivery(false);
-                }}>Recusar</Button>
-                <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={async()=>{
-                  setConfirmingDelivery(true);
-                  await sb.from('orders').update({status:'payment_confirmed'}).eq('id',order.id);
-                  await sb.from('notifications').insert({type:'order_accepted',user_id:order.buyer_id,book_id:bookId,order_id:order.id,message:`Pedido de "${book.title}" foi aceito! Combine a entrega no chat.`}).catch(()=>{});
-                  setOrder(prev=>({...prev,status:'payment_confirmed'}));
-                  setConfirmingDelivery(false);
-                }}>✓ Aceitar pedido</Button>
+                <Button kind="danger" size="sm" style={{flex:1}} disabled={confirmingDelivery} onClick={refuseOrder}>Recusar</Button>
+                <Button kind="primary" size="sm" style={{flex:2}} disabled={confirmingDelivery} onClick={acceptOrder}>✓ Aceitar pedido</Button>
               </div>
             </>
           )}
