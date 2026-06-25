@@ -1039,17 +1039,20 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
     if(!profile||saving)return;
     setSaving(true);
     try{
-      const {error}=await sb.from('orders').insert({
-        book_id:id,buyer_id:profile.id,seller_id:sellerId,status:'pending'
-      });
-      if(error)throw error;
-      await sb.from('notifications').insert({
-        type:'new_order',user_id:sellerId,book_id:id,
-        message:`${profile.name} quer comprar "${book.title}" por ${fmt(book.price)}. Confirme no chat!`
-      }).catch(()=>{});
+      const {data:existing}=await sb.from('orders').select('id').eq('book_id',id).eq('buyer_id',profile.id).maybeSingle();
+      if(!existing){
+        const {error}=await sb.from('orders').insert({
+          book_id:id,buyer_id:profile.id,seller_id:sellerId,status:'pending'
+        });
+        if(error)throw error;
+        await sb.from('notifications').insert({
+          type:'new_order',user_id:sellerId,book_id:id,
+          message:`${profile.name} quer comprar "${book.title}" por ${fmt(buyerPays)}. Confirme no chat!`
+        }).catch(()=>{});
+      }
       setConfirmed(true);
     }catch(err){
-      showToast('Erro: '+err.message);
+      showToast('Não foi possível registrar o pedido. Tente novamente.');
     }
     setSaving(false);
   };
@@ -1123,9 +1126,10 @@ function ProfileScreen({go,books,setBooks,profile,onLogout,showToast}){
   const myBooks=books.filter(b=>(b.seller_id||b.sellerId)===profile?.id);
 
   const deleteBook=async(bookId)=>{
-    const {error}=await sb.from('books').delete().eq('id',bookId);
-    if(error){showToast('Erro ao remover anuncio');return;}
+    const {error}=await sb.from('books').update({status:'deleted'}).eq('id',bookId);
+    if(error){showToast('Erro ao remover anúncio');return;}
     setBooks(prev=>prev.filter(b=>b.id!==bookId));
+    showToast('Anúncio removido');
   };
 
   if(!profile) return <LoadingScreen/>;
@@ -1273,8 +1277,8 @@ function AdminScreen({back,profile,showToast}){
   };
 
   const deleteBook=async(bid)=>{
-    const {error}=await sb.from('books').delete().eq('id',bid);
-    if(error){showToast('Erro: '+error.message);return;}
+    const {error}=await sb.from('books').update({status:'deleted'}).eq('id',bid);
+    if(error){showToast('Erro ao remover: '+error.message);return;}
     setAllBooks(prev=>prev.filter(b=>b.id!==bid));
     showToast('Anúncio removido');
   };
