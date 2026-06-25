@@ -475,9 +475,18 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
           <DeliveryTag type={book.delivery}/>
         </div>
         <div style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:16,marginBottom:18}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}}>
+            <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>Preço do livro</span>
+            <span style={{fontSize:14,fontWeight:700,color:'var(--ink)'}}>{fmt(book.price)}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+            <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>Taxa de serviço (8,5%)</span>
+            <span style={{fontSize:14,fontWeight:700,color:'#b45309'}}>+{fmt(buyerFee)}</span>
+          </div>
+          <div style={{height:1,background:'var(--line)',margin:'4px 0 8px'}}/>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
-            <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Preço</span>
-            <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(book.price)}</span>
+            <span style={{fontSize:15,fontWeight:800,color:'var(--ink)'}}>Total</span>
+            <span style={{fontSize:22,fontWeight:800,color:'var(--green-d)'}}>{fmt(buyerPays)}</span>
           </div>
         </div>
         <div style={{borderRadius:16,background:'var(--surface)',boxShadow:'inset 0 0 0 1.5px var(--line)',padding:16,marginBottom:18}}>
@@ -502,7 +511,7 @@ function DetailScreen({id,back,go,favs,toggleFav,books,profile,sellers}){
       {!isMe&&(
         <div style={{padding:'12px 18px 22px',background:'var(--surface)',boxShadow:'0 -1px 0 var(--line)',display:'flex',gap:10}}>
           <Button kind="secondary" onClick={()=>go('chatThread',{sellerId,bookId:book.id})} style={{flex:1}}>Chat</Button>
-          <Button kind="primary" onClick={()=>go('checkout',{id:book.id})} style={{flex:2}}>Comprar · {fmt(book.price)}</Button>
+          <Button kind="primary" onClick={()=>go('checkout',{id:book.id})} style={{flex:2}}>Comprar · {fmt(buyerPays)}</Button>
         </div>
       )}
     </div>
@@ -1080,7 +1089,7 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center',gap:14}}>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:13.5,fontWeight:700,color:'var(--muted)'}}>Valor a pagar</div>
-            <div style={{fontSize:34,fontWeight:800,color:'var(--green-d)',letterSpacing:-0.5}}>{fmt(book.price)}</div>
+            <div style={{fontSize:34,fontWeight:800,color:'var(--green-d)',letterSpacing:-0.5}}>{fmt(buyerPays)}</div>
           </div>
           <div style={{width:'100%',borderRadius:14,background:'oklch(0.97 0.03 152)',padding:'14px 16px'}}>
             <div style={{fontSize:11,fontWeight:700,color:'var(--green-d)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}}>Chave Pix (Celular)</div>
