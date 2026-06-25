@@ -113,7 +113,7 @@ const sb = createClient(SUPA_URL, SUPA_KEY, {auth:{flowType:'implicit',detectSes
 // ─── CONSTANTS ───────────────────────────────────────────────
 const FEE_EACH = 0.085;
 const ADMIN_EMAILS = ['andrefc2009@outlook.com','joaquimbuchheim@icloud.com'];
-const TABS = ['home','search','chat','profile'];
+const TABS = ['home','search','chat','orders','profile'];
 const PIX_KEY = '21998729191';
 const fmt = n => 'R$ ' + Number(n).toFixed(2).replace('.',',');
 const ICONBTN = {width:38,height:38,borderRadius:'50%',border:'none',background:'rgba(0,0,0,0.06)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0};
@@ -965,9 +965,9 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
   const pixCode=gerarPix(PIX_KEY,'PageSell','Rio de Janeiro',buyerPays);
 
   const copyPix=()=>{
-    navigator.clipboard.writeText(pixCode)
-      .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1800);})
-      .catch(()=>showToast('Nao foi possivel copiar'));
+    navigator.clipboard.writeText(PIX_KEY)
+      .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);})
+      .catch(()=>showToast('Não foi possível copiar'));
   };
 
   const confirmPayment=async()=>{
@@ -1017,19 +1017,21 @@ function CheckoutScreen({id,back,go,books,profile,showToast}){
         </div>
 
 
-        <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <div style={{fontSize:13.5,fontWeight:700,color:'var(--muted)'}}>Escaneie para pagar</div>
-          <div style={{fontSize:30,fontWeight:800,color:'var(--green-d)',margin:'4px 0 16px'}}>{fmt(buyerPays)}</div>
-          <div style={{padding:14,borderRadius:16,background:'#fff',boxShadow:'0 4px 16px -8px rgba(0,0,0,0.2)'}}><PixQR value={pixCode}/></div>
-
-          <div style={{marginTop:16,width:'100%',padding:'12px 14px',borderRadius:13,background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-            <div>
-              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:0.5}}>Pix Copia e Cola</div>
-              <div style={{fontSize:11.5,fontWeight:600,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pixCode.substring(0,32)}…</div>
-            </div>
-            <button onClick={copyPix} style={{height:40,padding:'0 14px',borderRadius:12,border:'none',cursor:'pointer',background:copied?'oklch(0.95 0.05 152)':'var(--ink)',color:copied?'var(--green-d)':'#fff',fontFamily:'inherit',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-              <Icon name={copied?'check':'copy'} size={15} color={copied?'var(--green-d)':'#fff'}/>{copied?'Copiado!':'Copiar'}
+        <div style={{background:'var(--surface)',borderRadius:20,padding:22,boxShadow:'inset 0 0 0 1.5px var(--line)',display:'flex',flexDirection:'column',alignItems:'center',gap:14}}>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:13.5,fontWeight:700,color:'var(--muted)'}}>Valor a pagar</div>
+            <div style={{fontSize:34,fontWeight:800,color:'var(--green-d)',letterSpacing:-0.5}}>{fmt(book.price)}</div>
+          </div>
+          <div style={{width:'100%',borderRadius:14,background:'oklch(0.97 0.03 152)',padding:'14px 16px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--green-d)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}}>Chave Pix (Celular)</div>
+            <div style={{fontSize:18,fontWeight:800,color:'var(--ink)',letterSpacing:0.5,marginBottom:10}}>{PIX_KEY}</div>
+            <div style={{fontSize:12,fontWeight:500,color:'var(--muted)',marginBottom:10}}>Nome: PageSell · Banco: Nubank</div>
+            <button onClick={copyPix} style={{width:'100%',height:44,borderRadius:12,border:'none',cursor:'pointer',background:copied?'var(--green)':'var(--ink)',color:'#fff',fontFamily:'inherit',fontSize:14,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+              <Icon name={copied?'check':'copy'} size={16} color="#fff"/>{copied?'Chave copiada!':'Copiar chave Pix'}
             </button>
+          </div>
+          <div style={{fontSize:12.5,fontWeight:500,color:'var(--muted)',textAlign:'center',lineHeight:1.5}}>
+            Abra o app do seu banco → Pix → Pagar → Cole a chave
           </div>
         </div>
 
@@ -1380,12 +1382,66 @@ function AdminScreen({back,profile,showToast}){
 }
 
 // ─── BOTTOM NAV ──────────────────────────────────────────────
+// ─── ORDERS SCREEN ───────────────────────────────────────────
+function OrdersScreen({go,profile,books}){
+  const [orders,setOrders]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+
+  React.useEffect(()=>{
+    if(!profile)return;
+    sb.from('orders').select('*').eq('buyer_id',profile.id).order('created_at',{ascending:false})
+      .then(({data})=>{setOrders(data||[]);setLoading(false);});
+  },[profile]);
+
+  const statusLabel={payment_confirmed:'Aguardando confirmação',completed:'Concluído',disputed:'Em disputa'};
+  const statusColor={payment_confirmed:'oklch(0.97 0.03 248)',completed:'oklch(0.96 0.04 152)',disputed:'oklch(0.97 0.03 25)'};
+  const statusTextColor={payment_confirmed:'oklch(0.38 0.1 248)',completed:'oklch(0.38 0.1 152)',disputed:'oklch(0.45 0.12 25)'};
+
+  return(
+    <div style={{background:'var(--bg)',minHeight:'100%'}}>
+      <div style={{padding:'58px 18px 16px',background:'var(--surface)',boxShadow:'0 1px 0 var(--line)'}}>
+        <div style={{fontSize:12,fontWeight:700,color:'var(--green-d)',letterSpacing:1,textTransform:'uppercase',marginBottom:2}}>PageSell</div>
+        <div style={{fontSize:26,fontWeight:800,color:'var(--ink)',letterSpacing:-0.7}}>Meus Pedidos</div>
+      </div>
+      <div style={{padding:16}}>
+        {loading&&<div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>Carregando…</div>}
+        {!loading&&orders.length===0&&(
+          <div style={{textAlign:'center',padding:'56px 20px',color:'var(--muted)'}}>
+            <div style={{width:64,height:64,borderRadius:20,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}><Icon name="wallet" size={28} color="var(--muted)"/></div>
+            <div style={{fontSize:16,fontWeight:800,color:'var(--ink)',marginBottom:6}}>Nenhum pedido ainda</div>
+            <div style={{fontSize:13}}>Quando comprar um livro, aparece aqui</div>
+          </div>
+        )}
+        {orders.map(o=>{
+          const book=books.find(b=>b.id===o.book_id)||{title:'Livro',price:0,subject:''};
+          const st=o.status||'payment_confirmed';
+          return(
+            <div key={o.id} onClick={()=>go('chatThread',{bookId:o.book_id,sellerId:o.seller_id})}
+              style={{borderRadius:16,background:'var(--surface)',boxShadow:'0 1px 2px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.06)',marginBottom:12,padding:14,cursor:'pointer',display:'flex',gap:13,alignItems:'center'}}>
+              <div style={{width:52,height:52,borderRadius:11,overflow:'hidden',flexShrink:0}}><BookCover book={book} radius={11}/></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14.5,fontWeight:800,color:'var(--ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{book.title}</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--muted)',marginBottom:6}}>{book.subject}</div>
+                <span style={{display:'inline-block',padding:'3px 10px',borderRadius:999,fontSize:11.5,fontWeight:700,background:statusColor[st],color:statusTextColor[st]}}>
+                  {statusLabel[st]||st}
+                </span>
+              </div>
+              <div style={{fontSize:15,fontWeight:800,color:'var(--green-d)',flexShrink:0}}>{fmt(book.price)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function BottomNav({current,go,unread=0,onChatOpen}){
   const items=[
     {key:'home',icon:'home',label:'Início'},
     {key:'search',icon:'search',label:'Buscar'},
     {key:'sell',center:true},
     {key:'chat',icon:'chat',label:'Chat'},
+    {key:'orders',icon:'wallet',label:'Pedidos'},
     {key:'profile',icon:'user',label:'Perfil'},
   ];
   return(
@@ -1623,6 +1679,9 @@ function App(){
       break;
     case 'chat':
       screen=<ChatListScreen go={go} chats={chats} profile={profile} sellers={sellers} books={books}/>;
+      break;
+    case 'orders':
+      screen=<OrdersScreen go={go} profile={profile} books={books}/>;
       break;
     case 'profile':
       screen=<ProfileScreen go={go} books={books} setBooks={setBooks} profile={{...profile,email:authUser?.email}} onLogout={handleLogout} showToast={showToast}/>;
